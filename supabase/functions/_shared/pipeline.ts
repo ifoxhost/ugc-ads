@@ -616,7 +616,10 @@ export interface KieClipSpec {
   // Optional ≤15s audio slice for Seedance beat-matching. The full song is
   // still muxed over the final stitched video by stitch-lyric-video.
   referenceAudioUrl?: string;
+  // Seedance: "480p" or "720p" (1080p is not supported by Kie's Seedance 2).
+  resolution?: "480p" | "720p";
 }
+
 
 /**
  * Strict validation for Seedance 2.0 `reference_audio_urls`:
