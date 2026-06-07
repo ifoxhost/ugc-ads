@@ -2301,6 +2301,35 @@ const Library = () => {
                 )}
               </div>
 
+              {/* Expiry countdown — top-right under the selection checkbox */}
+              {hasVideo && isCompleted && (() => {
+                const expiryInfo = getVideoExpiryInfo(ad.completed_at);
+                if (!expiryInfo) return null;
+                return (
+                  <div className={cn(
+                    "absolute top-10 right-2 px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1",
+                    expiryInfo.isExpiringSoon
+                      ? "bg-destructive/90 text-destructive-foreground"
+                      : "bg-black/60 text-white"
+                  )}>
+                    <Clock className="h-3 w-3" />
+                    {expiryInfo.daysLeft > 0
+                      ? `${expiryInfo.daysLeft}d left`
+                      : expiryInfo.hoursLeft > 0
+                        ? `${expiryInfo.hoursLeft}h left`
+                        : "Expiring soon"}
+                  </div>
+                );
+              })()}
+
+              {/* Video duration badge — bottom-left */}
+              {hasVideo && ad.video_duration && (
+                <div className="absolute bottom-2 left-2 px-2 py-1 rounded-md text-[10px] font-medium bg-black/70 text-white">
+                  {formatVideoDuration(ad.video_duration)}
+                </div>
+              )}
+
+
               {/* Quick Actions */}
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                 {isLyric && (
