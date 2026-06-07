@@ -9,6 +9,7 @@ import { ImageGenerationsManagement } from "@/components/admin/ImageGenerationsM
 import { DashboardStats } from "@/components/admin/DashboardStats";
 import { SubscriptionsManagement } from "@/components/admin/SubscriptionsManagement";
 import { UpcomingRenewalsWidget } from "@/components/admin/UpcomingRenewalsWidget";
+import { AppSettingsManagement } from "@/components/admin/AppSettingsManagement";
 
 const Admin = () => {
   const { isAdmin, loading } = useUserRole();
