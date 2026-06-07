@@ -51,6 +51,30 @@ serve(async (req) => {
     const watermark = formData.get("watermark") as string || "";
     const imageCount = parseInt(formData.get("imageCount") as string || "1");
 
+    // ── Enforce Nano Banana as the only allowed image engine ───────────────────
+    const ALLOWED_IMAGE_MODEL = "nano-banana";
+    const requestedModel = (formData.get("imageModel") as string | null)
+      ?? (formData.get("aiImageModel") as string | null)
+      ?? (formData.get("engine") as string | null)
+      ?? (formData.get("model") as string | null)
+      ?? ALLOWED_IMAGE_MODEL;
+
+    const normalizedModel = String(requestedModel).toLowerCase().trim();
+    if (
+      normalizedModel !== ALLOWED_IMAGE_MODEL &&
+      normalizedModel !== "nano-banana-pro" &&
+      normalizedModel !== "google/gemini-2.5-flash-image"
+    ) {
+      console.warn(`Rejected image generation request — disallowed engine: ${requestedModel}`);
+      return new Response(
+        JSON.stringify({
+          error: `Image engine "${requestedModel}" is not allowed. This service only supports Nano Banana (Google Gemini image).`,
+          allowed: [ALLOWED_IMAGE_MODEL],
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log("Received UGC Image Ad request:", {
       userId: user.id,
       email: user.email,
