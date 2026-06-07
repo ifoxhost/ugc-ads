@@ -166,7 +166,7 @@ serve(async (req) => {
             console.warn(`[stitch] fal attempt=${attempt}/${maxAttempts} returned no url ad=${adId}`);
             continue;
           }
-          const drift = await validateDuration(falUrl, totalDuration);
+          const drift = await validateDuration(falUrl, totalDuration, tolerance);
           lastFalDrift = drift;
           entry.measuredDurationSec = drift.measured;
           entry.driftSec = drift.delta;
@@ -223,7 +223,7 @@ serve(async (req) => {
           resolution: adCopy.resolution,
         });
         if (ssUrl) {
-          const drift = await validateDuration(ssUrl, totalDuration);
+          const drift = await validateDuration(ssUrl, totalDuration, tolerance);
           entry.measuredDurationSec = drift.measured;
           entry.driftSec = drift.delta;
           entry.withinTolerance = drift.ok;
