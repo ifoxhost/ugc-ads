@@ -283,8 +283,8 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
         duration: segmentLength,
         start_time: 0,
         end_time: 0,
-        start_reference_image: ad.ad_copy?.referenceImageUrl || "https://picsum.photos/id/40/300/300",
-        end_reference_image: "https://picsum.photos/id/41/300/300",
+        start_reference_image: ad.ad_copy?.referenceImageUrl || "/placeholder.svg",
+        end_reference_image: ad.ad_copy?.referenceImageUrl || "/placeholder.svg",
         camera_setting: "Dynamic Tracking",
         motion_setting: "Medium Flow",
         environment_setting: "Neon Streets",
@@ -373,8 +373,8 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
       duration: 8,
       start_time: 0,
       end_time: 0,
-      start_reference_image: "https://picsum.photos/id/40/300/300",
-      end_reference_image: "https://picsum.photos/id/41/300/300",
+      start_reference_image: ad.ad_copy?.referenceImageUrl || "/placeholder.svg",
+      end_reference_image: ad.ad_copy?.referenceImageUrl || "/placeholder.svg",
       camera_setting: "Dynamic Tracking",
       motion_setting: "Medium Flow",
       environment_setting: "Neon Alleyways",
@@ -496,104 +496,63 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
     }
   };
 
-  // Regenerate Video Scene
+  // Regenerate Video Scene — submits a single Kie clip via the
+  // `regenerate-scene-video` edge function and swaps the preview URL once
+  // the clip finishes. The edge function handles submission + polling so the
+  // browser only sees a single awaited request.
   const handleRegenerateSceneVideo = async (clipId: string) => {
     const target = clips.find(c => c.id === clipId);
     if (!target) return;
 
-    updateClip(clipId, { status: "processing", progress: 10 });
-    
+    updateClip(clipId, { status: "processing", progress: 15 });
+
+    // Soft progress so the UI keeps moving while the edge function polls Kie.
+    let pct = 15;
+    const tick = setInterval(() => {
+      pct = Math.min(92, pct + 4);
+      updateClip(clipId, { progress: pct });
+    }, 3000);
+
     try {
       console.log(`[Video Scene Generate Editor] Submitting prompt: "${target.prompt}"`);
-      const response = await fetch("http://localhost:3000/api/video/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: target.prompt,
-          model: ad.video_model || "kling",
-          aspectRatio: ad.aspect_ratio || "16:9"
-        })
+      const { data, error } = await supabase.functions.invoke("regenerate-scene-video", {
+        body: { sceneId: clipId },
       });
-      
-      const resData = await response.json();
-      if (!response.ok || resData.error) {
-        throw new Error(resData.error || "Failed to submit video task");
-      }
-      
-      const taskId = resData.data?.taskId;
-      if (!taskId) throw new Error("No task ID returned from video generator");
-      console.log(`[Video Scene Generate Editor] Submitted successfully. Task ID: ${taskId}`);
-      
-      let progress = 10;
-      const interval = setInterval(async () => {
-        try {
-          const statusRes = await fetch(`http://localhost:3000/api/video/status/${taskId}`);
-          const statusData = await statusRes.json();
-          
-          if (!statusRes.ok || statusData.error) {
-            throw new Error(statusData.error || "Failed to query task status");
-          }
-          
-          const record = statusData.data?.record?.[0];
-          const taskStatus = statusData.data?.status;
-          console.log(`[Video Scene Polling Editor] Task ${taskId} status: ${taskStatus}`);
-          
-          if (taskStatus === "success" && record?.videoUrl) {
-            clearInterval(interval);
-            const videoUrl = record.videoUrl;
-            
-            updateClip(clipId, {
-              status: "completed",
-              videoUrl: videoUrl,
-              video_url: videoUrl,
-              model_used: ad.video_model === "veo" ? "Google Veo 3.1" : "Kling 3.0",
-              seed: Math.floor(Math.random() * 9000000) + 1000000,
-              generation_time: "4.5s",
-              prompt_version: (target.prompt_version || 1) + 1
-            });
-            
-            const verSnapshot = {
-              prompt: target.prompt,
-              image_url: target.start_reference_image,
-              video_url: videoUrl,
-              camera_setting: target.camera_setting,
-              motion_setting: target.motion_setting,
-              environment_setting: target.environment_setting,
-              lighting_setting: target.lighting_setting,
-              character_setting: target.character_setting,
-              start_reference_image: target.start_reference_image,
-              end_reference_image: target.end_reference_image
-            };
-            
-            saveSceneVersion(clipId, "video", verSnapshot);
-            toast({ title: "Video Scene Rendered", description: `Scene ${target.scene_number} clip is ready.` });
-          } else if (taskStatus === "failed") {
-            clearInterval(interval);
-            throw new Error("Video generation failed on server");
-          } else {
-            progress = Math.min(95, progress + 10);
-            updateClip(clipId, { progress });
-          }
-        } catch (pollErr) {
-          clearInterval(interval);
-          console.error("Video polling error in editor:", pollErr);
-          updateClip(clipId, { status: "idle" });
-          toast({
-            title: "Video generation failed",
-            description: pollErr instanceof Error ? pollErr.message : "Failed to compile video scene.",
-            variant: "destructive"
-          });
-        }
-      }, 3000);
-      
+      clearInterval(tick);
+      if (error) throw error;
+      const videoUrl = (data as any)?.videoUrl as string | undefined;
+      if (!videoUrl) throw new Error((data as any)?.error || "No video URL returned");
+
+      updateClip(clipId, {
+        status: "completed",
+        progress: 100,
+        videoUrl,
+        video_url: videoUrl,
+        prompt_version: (target.prompt_version || 1) + 1,
+      });
+
+      saveSceneVersion(clipId, "video", {
+        prompt: target.prompt,
+        image_url: target.start_reference_image,
+        video_url: videoUrl,
+        camera_setting: target.camera_setting,
+        motion_setting: target.motion_setting,
+        environment_setting: target.environment_setting,
+        lighting_setting: target.lighting_setting,
+        character_setting: target.character_setting,
+        start_reference_image: target.start_reference_image,
+        end_reference_image: target.end_reference_image,
+      });
+      toast({ title: "Video Scene Rendered", description: `Scene ${target.scene_number} clip is ready.` });
     } catch (err) {
+      clearInterval(tick);
       console.error("Video submission error in editor:", err);
+      updateClip(clipId, { status: "idle" });
       toast({
         title: "Video generation failed",
         description: err instanceof Error ? err.message : "Failed to trigger video generation.",
-        variant: "destructive"
+        variant: "destructive",
       });
-      updateClip(clipId, { status: "idle" });
     }
   };
 
@@ -995,47 +954,62 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
                   {/* Character Consistency Reference frames */}
                   <div className="space-y-2 border-t border-border/30 pt-3">
                     <Label className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">Consistency reference frames</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      
-                      {/* Start frame slot */}
-                      <div className="space-y-1">
-                        <span className="text-[8px] text-muted-foreground block">Start Reference Frame</span>
-                        <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
-                          <img src={clip.start_reference_image || "https://picsum.photos/id/40/300/300"} className="w-8 h-8 rounded object-cover" />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[9px] truncate block text-muted-foreground">Start Anchor</span>
+                    {(() => {
+                      const bucketRefs: string[] = Array.from(new Set([
+                        ...((ad.ad_copy?.referenceImages as string[] | undefined) ?? []),
+                        ...((ad.ad_copy?.pexelsBackgroundUrls as string[] | undefined) ?? []),
+                        ad.ad_copy?.referenceImageUrl as string | undefined,
+                        ad.ad_copy?.pexelsBackgroundUrl as string | undefined,
+                        clip.start_reference_image,
+                        clip.end_reference_image,
+                      ].filter((u): u is string => typeof u === "string" && u.length > 0)));
+                      const fallback = bucketRefs[0] || "/placeholder.svg";
+                      return (
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Start frame slot */}
+                          <div className="space-y-1">
+                            <span className="text-[8px] text-muted-foreground block">Start Reference Frame</span>
+                            <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
+                              <img src={clip.start_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[9px] truncate block text-muted-foreground">Start Anchor</span>
+                              </div>
+                              <select
+                                value={clip.start_reference_image || ""}
+                                onChange={(e) => updateClip(clip.id, { start_reference_image: e.target.value })}
+                                className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
+                              >
+                                {bucketRefs.length === 0 && <option value="">—</option>}
+                                {bucketRefs.map((u, i) => (
+                                  <option key={`s-${i}`} value={u}>Ref {i + 1}</option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
-                          <select
-                            onChange={(e) => updateClip(clip.id, { start_reference_image: e.target.value })}
-                            className="bg-transparent border-none text-[8px] max-w-[50px] focus:outline-none"
-                          >
-                            <option value="https://picsum.photos/id/40/300/300">Frame 1</option>
-                            <option value="https://picsum.photos/id/42/300/300">Frame 2</option>
-                            <option value="https://picsum.photos/id/45/300/300">Frame 3</option>
-                          </select>
-                        </div>
-                      </div>
 
-                      {/* End frame slot */}
-                      <div className="space-y-1">
-                        <span className="text-[8px] text-muted-foreground block">End Reference Frame</span>
-                        <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
-                          <img src={clip.end_reference_image || "https://picsum.photos/id/41/300/300"} className="w-8 h-8 rounded object-cover" />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[9px] truncate block text-muted-foreground">End Anchor</span>
+                          {/* End frame slot */}
+                          <div className="space-y-1">
+                            <span className="text-[8px] text-muted-foreground block">End Reference Frame</span>
+                            <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
+                              <img src={clip.end_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[9px] truncate block text-muted-foreground">End Anchor</span>
+                              </div>
+                              <select
+                                value={clip.end_reference_image || ""}
+                                onChange={(e) => updateClip(clip.id, { end_reference_image: e.target.value })}
+                                className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
+                              >
+                                {bucketRefs.length === 0 && <option value="">—</option>}
+                                {bucketRefs.map((u, i) => (
+                                  <option key={`e-${i}`} value={u}>Ref {i + 1}</option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
-                          <select
-                            onChange={(e) => updateClip(clip.id, { end_reference_image: e.target.value })}
-                            className="bg-transparent border-none text-[8px] max-w-[50px] focus:outline-none"
-                          >
-                            <option value="https://picsum.photos/id/41/300/300">Frame A</option>
-                            <option value="https://picsum.photos/id/48/300/300">Frame B</option>
-                            <option value="https://picsum.photos/id/49/300/300">Frame C</option>
-                          </select>
                         </div>
-                      </div>
-
-                    </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Versions history dropdown */}
