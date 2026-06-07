@@ -474,6 +474,7 @@ async function stitchWithShotstack(opts: {
 async function validateDuration(
   videoUrl: string,
   expectedSec: number,
+  toleranceSec: number = DURATION_TOLERANCE_SEC,
 ): Promise<{ ok: boolean; measured: number | null; delta: number | null }> {
   try {
     const r = await fetch(videoUrl, { headers: { Range: "bytes=0-262143" } });
@@ -488,7 +489,7 @@ async function validateDuration(
       return { ok: true, measured: null, delta: null };
     }
     const delta = Math.abs(measured - expectedSec);
-    return { ok: delta <= DURATION_TOLERANCE_SEC, measured, delta };
+    return { ok: delta <= toleranceSec, measured, delta };
   } catch (e) {
     console.warn(`[stitch.validate] error:`, (e as Error).message);
     return { ok: true, measured: null, delta: null };
