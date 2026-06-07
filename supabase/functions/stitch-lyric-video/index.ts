@@ -81,9 +81,10 @@ serve(async (req) => {
 
   const sbUrl = Deno.env.get("SUPABASE_URL")!;
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const falKey = Deno.env.get("FAL_KEY");
+  const falKey = loadFalKey();
   const shotstackKey = Deno.env.get("SHOTSTACK_API_KEY");
   const sb = createClient(sbUrl, sbKey);
+
 
   try {
     const { adId } = await req.json();
