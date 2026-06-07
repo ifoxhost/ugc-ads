@@ -20,6 +20,7 @@ import Payments from "./pages/Payments";
 import Dashboard from "./pages/Dashboard";
 import Trash from "./pages/Trash";
 import NotificationPreferences from "./pages/NotificationPreferences";
+import Notifications from "./pages/Notifications";
 import About from "./pages/About";
 import Changelog from "./pages/Changelog";
 import Careers from "./pages/Careers";
