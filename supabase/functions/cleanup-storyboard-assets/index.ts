@@ -61,8 +61,8 @@ serve(async (req) => {
   try {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    const refTtlDays = envInt("STORYBOARD_REF_TTL_DAYS", 7);
-    const imgTtlDays = envInt("STORYBOARD_IMAGE_TTL_DAYS", 14);
+    const refTtlDays = await getTtl(sb, "storyboard_ref_ttl_days", "STORYBOARD_REF_TTL_DAYS", 7);
+    const imgTtlDays = await getTtl(sb, "storyboard_image_ttl_days", "STORYBOARD_IMAGE_TTL_DAYS", 14);
     const now = Date.now();
     const refCutoff = now - refTtlDays * 86_400_000;
     const imgCutoff = now - imgTtlDays * 86_400_000;
