@@ -66,5 +66,18 @@ The frontend calls `supabase.functions.invoke("render-lyric-video", { adId })`.
 
 ## Required secrets
 - `KIE_AI_API_KEY` — used by `render-lyric-video` and `poll-lyric-video-status`.
-- `SHOTSTACK_API_KEY` — used by `stitch-lyric-video` (optional; fallback
-  publishes the first clip when missing).
+- `FAL_KEY` — primary stitcher (`fal-ai/ffmpeg-api/compose`). Format `<id>:<secret>`. Always redacted from logs and audit trail.
+- `SHOTSTACK_API_KEY` — fallback stitcher (used when fal.ai exhausts retries or `FAL_KEY` is missing/malformed).
+
+## Tunable stitch env vars
+Set in Lovable Cloud → Secrets (no code change / redeploy needed beyond restarting the function):
+
+| Env var | Default | Range | Effect |
+| --- | --- | --- | --- |
+| `STITCH_FAL_MAX_ATTEMPTS` | `2` | 1–5 | How many fal.ai compose attempts before falling back to Shotstack. Each attempt re-submits and re-validates duration. |
+| `STITCH_DURATION_TOLERANCE_SEC` | `1.5` | > 0 | Max allowed drift (seconds) between the imported Suno audio length and the measured mp4 duration. Larger drift is rejected and triggers a retry/fallback. |
+
+## Stitch audit trail
+Every run writes `ad_copy.stitchAudit` with one entry per attempt:
+`{ stitcher, attempt, outcome, measuredDurationSec, driftSec, withinTolerance, error?, redactionApplied }`.
+The Library "Render details" panel renders this list and exposes a **Re-stitch** action plus a **Download audit (JSON)** button.
