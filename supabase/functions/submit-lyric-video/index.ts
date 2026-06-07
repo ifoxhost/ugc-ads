@@ -46,7 +46,9 @@ serve(async (req) => {
       fontTheme = "bold", colorPalette = "dark",
       variationCount = 1,
       pexelsBackgroundUrl = null, pexelsBackgroundThumbnail = null,
+      pexelsBackgroundUrls = null, // optional array of selected pexels stills/videos
       referenceImageUrl = null, referenceImageName = null,
+      referenceImageUrls = null,   // optional array of uploaded ref image URLs
       aiModel = "kling", aiImageModel = "nano-banana",
       resolution = "1080p",
       audioFileUrl = null, audioUrl = null,
