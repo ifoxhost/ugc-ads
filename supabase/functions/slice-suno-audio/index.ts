@@ -180,17 +180,31 @@ serve(async (req) => {
       jobValidation,
     });
 
-    return json({
-      success: true,
-      count: slices.length,
-      errorCount: sliceErrors.length,
-      cloudinaryPublicId: uploaded.publicId,
-      sourceDurationSec: uploaded.durationSec,
-      slices,
-      errors: sliceErrors,
-    });
   } catch (e) {
     console.error("[slice-suno-audio] error:", e);
+    try {
+      const body = await req.clone().json().catch(() => ({}));
+      const failedAdId = body?.adId;
+      if (failedAdId) {
+        const sb2 = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const { data: row } = await sb2
+          .from("generated_ads").select("ad_copy").eq("id", failedAdId).maybeSingle();
+        const cur = (row?.ad_copy ?? {}) as Record<string, any>;
+        await sb2.from("generated_ads").update({
+          ad_copy: {
+            ...cur,
+            sliceStatus: {
+              phase: "failed",
+              at: new Date().toISOString(),
+              error: e instanceof Error ? e.message : "Unknown",
+            },
+          },
+        }).eq("id", failedAdId);
+      }
+    } catch (_) { /* ignore */ }
     return json({ error: e instanceof Error ? e.message : "Unknown" }, 500);
   }
 
