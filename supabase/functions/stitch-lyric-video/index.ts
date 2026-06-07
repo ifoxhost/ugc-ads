@@ -531,6 +531,28 @@ function readMp4Duration(buf: Uint8Array): number | null {
   return null;
 }
 
+interface AuditEntry {
+  stitcher: string;
+  attempt: number;
+  startedAt?: string;
+  endedAt?: string;
+  outcome?:
+    | "accepted"
+    | "accepted_with_drift"
+    | "drift_rejected"
+    | "no_url"
+    | "error"
+    | "skipped_no_key";
+  measuredDurationSec?: number | null;
+  driftSec?: number | null;
+  withinTolerance?: boolean | null;
+  requestedDurationSec?: number | null;
+  tolerance?: number | null;
+  error?: string;
+  /** True when secrets are redacted from logs/errors for this entry. */
+  redactionApplied?: boolean;
+}
+
 async function finalize(
   sb: any,
   adId: string,
@@ -546,6 +568,8 @@ async function finalize(
     falAttempts?: number;
     falLastDriftSec?: number | null;
   },
+  audit?: AuditEntry[],
+  startedAt?: string,
 ) {
   await sb.from("generated_ads").update({
     status: "completed",
@@ -570,6 +594,18 @@ async function finalize(
         falLastDriftSec: meta?.falLastDriftSec ?? null,
         validatedAt: new Date().toISOString(),
       },
+      stitchAudit: audit && audit.length
+        ? {
+            version: 1,
+            startedAt: startedAt ?? null,
+            finishedAt: new Date().toISOString(),
+            finalStitcher: via,
+            tolerance: meta?.tolerance ?? null,
+            requestedDurationSec: meta?.requested ?? null,
+            entries: audit,
+            redactionApplied: audit.every((a) => a.redactionApplied !== false),
+          }
+        : (adCopy.stitchAudit ?? null),
     },
   }).eq("id", adId);
   try {
