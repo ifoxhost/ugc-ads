@@ -105,7 +105,8 @@ const App = () => (
                   <Route path="/trash" element={<ProtectedRoute><Trash /></ProtectedRoute>} />
                   <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
                   <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-                  <Route path="/account/notifications" element={<ProtectedRoute><NotificationPreferences /></ProtectedRoute>} />
+                 <Route path="/account/notifications" element={<ProtectedRoute><NotificationPreferences /></ProtectedRoute>} />
+                 <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
                   <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
                   <Route path="/payments/success" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
                   <Route path="/payments/cancel" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
