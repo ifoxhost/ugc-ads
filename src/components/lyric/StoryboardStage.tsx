@@ -85,6 +85,10 @@ export default function StoryboardStage({ adId, onClose }: Props) {
   const stage: string = ad?.ad_copy?.pipelineStage ?? "script";
   const allReady = scenes.length > 0 && scenes.every((s) => s.image_status === "ready" && s.image_url);
   const anyFailed = scenes.some((s) => s.image_status === "failed");
+  // Derive "Re-roll all in progress" from server state so a refresh keeps the UI in sync.
+  const reRollInFlight = scenes.length > 0
+    && scenes.filter((s) => s.image_status === "generating" || s.image_status === "pending").length >= 2;
+  const showRegenAllBusy = regenAllLoading || reRollInFlight;
 
   const handleRegen = async (sceneId: string) => {
     setRegenLoading(sceneId);
