@@ -678,6 +678,7 @@ export type Database = {
           image_status: string
           image_url: string | null
           index: number
+          locked: boolean
           lyric_lines: string[]
           prompt: Json
           regen_count: number
@@ -695,6 +696,7 @@ export type Database = {
           image_status?: string
           image_url?: string | null
           index: number
+          locked?: boolean
           lyric_lines?: string[]
           prompt?: Json
           regen_count?: number
@@ -712,6 +714,7 @@ export type Database = {
           image_status?: string
           image_url?: string | null
           index?: number
+          locked?: boolean
           lyric_lines?: string[]
           prompt?: Json
           regen_count?: number

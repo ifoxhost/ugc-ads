@@ -1,0 +1,1 @@
+ALTER TABLE public.video_scenes ADD COLUMN IF NOT EXISTS locked boolean NOT NULL DEFAULT false;
