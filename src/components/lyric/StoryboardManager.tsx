@@ -363,13 +363,33 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                 </Button>
               )}
             </div>
-            {isRendering && <Progress value={videoProgress} className="h-2" />}
-            {videoUrl && (
+            {/* Aggregate storyboard progress */}
+            {scenes.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>Storyboard images</span>
+                  <span>{readyCount}/{scenes.length} ready</span>
+                </div>
+                <Progress value={(readyCount / scenes.length) * 100} className="h-2" />
+              </div>
+            )}
+            {isRendering && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>Render progress</span>
+                  <span>{videoProgress}%</span>
+                </div>
+                <Progress value={videoProgress} className="h-2" />
+              </div>
+            )}
+            {videoUrl ? (
               <video
                 src={videoUrl}
                 controls
                 className="w-full max-h-[60vh] rounded-lg bg-black"
               />
+            ) : (
+              <TimelinePreview scenes={scenes} audioUrl={audioUrl} />
             )}
           </CardContent>
         </Card>
