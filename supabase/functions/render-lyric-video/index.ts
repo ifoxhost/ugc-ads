@@ -61,8 +61,10 @@ serve(async (req) => {
 
     const taskId = await submitKieRender(adId, {
       endpoint: kieModel.endpoint,
+      kind: kieModel.kind,
+      modelId: kieModel.id,
       params: {
-        prompt: String(adCopy.title ?? ""),
+        prompt: String(adCopy.title ?? "Lyric video"),
         audioUrl: adCopy.audioFileUrl ?? null,
         referenceImageUrl: adCopy.referenceImageUrl ?? null,
         pexelsBackgroundUrl: adCopy.pexelsBackgroundUrl ?? null,
