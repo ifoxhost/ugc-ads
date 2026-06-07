@@ -58,9 +58,21 @@ async function listAll(sb: ReturnType<typeof createClient>, bucket: string, pref
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const startedAt = new Date().toISOString();
+  let triggeredBy = "cron";
   try {
-    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    if (body && typeof body.triggeredBy === "string") triggeredBy = body.triggeredBy;
+  } catch { /* ignore */ }
 
+  // Insert an in-flight row immediately so the admin panel sees runs even if we crash.
+  const { data: runRow } = await sb.from("cleanup_runs")
+    .insert({ started_at: startedAt, triggered_by: triggeredBy, success: false })
+    .select("id").maybeSingle();
+  const runId = runRow?.id as string | undefined;
+
+  try {
     const refTtlDays = await getTtl(sb, "storyboard_ref_ttl_days", "STORYBOARD_REF_TTL_DAYS", 7);
     const imgTtlDays = await getTtl(sb, "storyboard_image_ttl_days", "STORYBOARD_IMAGE_TTL_DAYS", 14);
     const now = Date.now();
@@ -83,7 +95,6 @@ serve(async (req) => {
     }
 
     // ── 2) Scene images: prune previous-generation/orphaned files ─────────────
-    // Build a Set of currently-active scene image paths (relative to bucket).
     const { data: liveScenes } = await sb.from("video_scenes")
       .select("image_url").not("image_url", "is", null);
     const live = new Set<string>();
@@ -95,7 +106,7 @@ serve(async (req) => {
 
     const imgs = await listAll(sb, IMG_BUCKET);
     const imgsToDelete = imgs.filter((f) => {
-      if (live.has(f.name)) return false; // currently referenced — keep
+      if (live.has(f.name)) return false;
       const t = Date.parse(f.updated_at ?? f.created_at ?? "");
       return Number.isFinite(t) && t < imgCutoff;
     }).map((f) => f.name);
@@ -115,11 +126,35 @@ serve(async (req) => {
       deleted: { refs: refsDeleted, imgs: imgsDeleted },
     };
     console.log("[cleanup-storyboard-assets]", JSON.stringify(result));
+
+    if (runId) {
+      await sb.from("cleanup_runs").update({
+        finished_at: new Date().toISOString(),
+        success: true,
+        ref_ttl_days: refTtlDays,
+        img_ttl_days: imgTtlDays,
+        refs_scanned: refs.length,
+        imgs_scanned: imgs.length,
+        refs_deleted: refsDeleted,
+        imgs_deleted: imgsDeleted,
+        live_imgs: live.size,
+      }).eq("id", runId);
+    }
+
     return new Response(JSON.stringify(result),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("[cleanup-storyboard-assets] error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }),
+    const msg = e instanceof Error ? e.message : "Unknown";
+    if (runId) {
+      await sb.from("cleanup_runs").update({
+        finished_at: new Date().toISOString(),
+        success: false,
+        error_message: msg.slice(0, 1000),
+      }).eq("id", runId);
+    }
+    return new Response(JSON.stringify({ error: msg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
+
