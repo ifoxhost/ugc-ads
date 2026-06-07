@@ -1109,7 +1109,7 @@ const Library = () => {
 
   if (editingStoryboardAd) {
     return (
-      <StoryboardEditor
+      <StoryboardManager
         ad={editingStoryboardAd}
         onClose={() => setEditingStoryboardAd(null)}
         onSave={(updatedAd) => {
