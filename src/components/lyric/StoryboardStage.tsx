@@ -274,8 +274,21 @@ export default function StoryboardStage({ adId, onClose }: Props) {
             );
           })()}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
+          {scenes.some(s => s.image_status === "failed") && (
+            <Button
+              variant="destructive" size="sm"
+              disabled={retryFailedLoading || showRegenAllBusy || stage === "rendering"}
+              onClick={handleRetryAllFailed}>
+              {retryFailedLoading ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <RotateCcw className="w-4 h-4 mr-1" />
+              )}
+              Retry all failed
+            </Button>
+          )}
           <Button
             variant="outline" size="sm"
             disabled={showRegenAllBusy || scenes.length === 0 || stage === "rendering"}
@@ -307,6 +320,75 @@ export default function StoryboardStage({ adId, onClose }: Props) {
           )}
         </div>
       </div>
+
+      {/* Failed-scene details drawer */}
+      <Sheet open={!!detailsScene} onOpenChange={(o) => !o && setDetailsScene(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {detailsScene && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-destructive" />
+                  Scene {detailsScene.index + 1} — failure details
+                </SheetTitle>
+                <SheetDescription>
+                  {Math.round(detailsScene.start_sec)}–{Math.round(detailsScene.end_sec)}s
+                </SheetDescription>
+              </SheetHeader>
+              <div className="space-y-4 mt-4 text-sm">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="destructive">Failed</Badge>
+                  {detailsScene.failed_step && (
+                    <Badge variant="outline">Step: {detailsScene.failed_step}</Badge>
+                  )}
+                  {detailsScene.regen_count > 0 && (
+                    <Badge variant="outline">Attempts: {detailsScene.regen_count}</Badge>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground uppercase">Last error</div>
+                  <pre className="text-xs bg-muted rounded-md p-3 whitespace-pre-wrap break-words">
+{detailsScene.error_message ?? "No error message captured."}
+                  </pre>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Created</div>
+                    <div>{new Date(detailsScene.created_at).toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Last updated</div>
+                    <div>{new Date(detailsScene.updated_at).toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {detailsScene.prompt?.story && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-muted-foreground uppercase">Scene prompt</div>
+                    <p className="text-xs text-foreground/90">{detailsScene.prompt.story}</p>
+                  </div>
+                )}
+
+                <div className="pt-2 flex gap-2">
+                  <Button
+                    size="sm" variant="destructive" className="flex-1"
+                    disabled={regenLoading === detailsScene.id}
+                    onClick={async () => {
+                      const id = detailsScene.id;
+                      setDetailsScene(null);
+                      await handleRegen(id);
+                    }}>
+                    <RefreshCw className="w-3 h-3 mr-1" /> Retry this scene
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
+
