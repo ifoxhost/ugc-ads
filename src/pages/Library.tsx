@@ -88,6 +88,21 @@ interface AdCopy {
   stitchedBy?: string;
   stitchValidation?: StitchValidation;
   stitchAudit?: StitchAudit;
+  sceneAudioSlices?: Array<{
+    sceneId: string;
+    index?: number;
+    startSec: number;
+    durationSec: number;
+    url: string;
+  }>;
+  sceneAudioSliceErrors?: Array<{
+    sceneId: string;
+    index: number;
+    reason: string;
+    durationSec: number;
+  }>;
+  sceneAudioSlicesGeneratedAt?: string;
+  cloudinaryAudio?: { publicId: string; durationSec: number; format: string };
 }
 
 interface GeneratedAd {
