@@ -1536,7 +1536,7 @@ const UGCGenerator = () => {
                 )}
 
                 {/* Library Section Capped at 4 items */}
-                {completedAds.length > 0 && (
+                {(completedAds.length > 0 || inProgressAds.length > 0) && (
                   <div className="space-y-4 pt-6 border-t border-border mt-8">
                     <div className="flex items-center justify-between mb-4">
                       <div>
@@ -1551,7 +1551,10 @@ const UGCGenerator = () => {
                     </div>
                     
                     <OutputGallery
-                      ads={completedAds.slice(0, 4) as any}
+                      ads={[
+                        ...inProgressAds,
+                        ...completedAds.filter((ad) => !inProgressAds.includes(ad)),
+                      ].slice(0, 4) as any}
                       onDelete={handleDeleteAd}
                       onEditStoryboard={(ad) => setEditingStoryboardAd(ad)}
                       isLoading={loadingAds}

@@ -122,7 +122,15 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
   };
 
   const isVideoProcessing = (ad: GeneratedAd) => {
-    return ad.status === "video_processing" || ad.video_status === "queued" || ad.video_status === "processing";
+    return (
+      ad.status === "processing" ||
+      ad.status === "video_processing" ||
+      ad.video_status === "queued" ||
+      ad.video_status === "processing" ||
+      ad.video_status === "rendering" ||
+      ad.video_status === "fetching" ||
+      ad.video_status === "saving"
+    );
   };
 
   const isVideoRetrying = (ad: GeneratedAd) => {
@@ -133,24 +141,43 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
     return ad.status === "video_failed" || ad.video_status === "failed";
   };
 
-  // Get processing status message with progress
-  const getVideoStatusMessage = (ad: GeneratedAd): { message: string; progress: number } => {
+  // Get processing status message with progress + ETA
+  const getVideoStatusMessage = (ad: GeneratedAd): { message: string; progress: number; eta?: string } => {
     const progress = ad.video_progress || 0;
-    
-    if (ad.video_status === "queued") {
-      return { message: "Queued...", progress: 0 };
+    // Estimate remaining time assuming a typical 4-minute render budget.
+    const estimateEta = (pct: number): string | undefined => {
+      if (pct <= 0 || pct >= 100) return undefined;
+      const totalSec = 240; // ~4 min baseline
+      const remaining = Math.max(5, Math.round(totalSec * (1 - pct / 100)));
+      if (remaining < 60) return `~${remaining}s left`;
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      return s === 0 ? `~${m}m left` : `~${m}m ${s}s left`;
+    };
+
+    if (ad.status === "processing") {
+      return { message: "Preparing scenes…", progress: Math.max(progress, 3) };
     }
-    if (ad.video_status === "processing") {
+    if (ad.video_status === "queued") {
+      return { message: "Queued — waiting for a render slot…", progress: 2 };
+    }
+    if (ad.video_status === "processing" || ad.video_status === "rendering") {
       if (progress > 0) {
-        return { message: `Rendering... ${progress}%`, progress };
+        return { message: `Rendering video… ${progress}%`, progress, eta: estimateEta(progress) };
       }
-      return { message: "Rendering video...", progress: 5 };
+      return { message: "Rendering video…", progress: 5 };
+    }
+    if (ad.video_status === "fetching") {
+      return { message: "Fetching assets…", progress: Math.max(progress, 10) };
+    }
+    if (ad.video_status === "saving") {
+      return { message: "Saving final cut…", progress: Math.max(progress, 90) };
     }
     if (ad.video_status === "retrying") {
       const retryCount = ad.video_retry_count || 0;
-      return { message: `Retrying (${retryCount}/3)...`, progress: 0 };
+      return { message: `Retrying (${retryCount}/3)…`, progress: Math.max(progress, 2) };
     }
-    return { message: "Creating video...", progress: 0 };
+    return { message: "Creating video…", progress: Math.max(progress, 1) };
   };
 
   if (isLoading) {
@@ -188,14 +215,7 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
             onClick={() => (ad.status === "completed" || ad.generated_video_url) && setSelectedAd(ad)}
           >
             <CardContent className="p-0 relative">
-              {ad.status === "processing" ? (
-                <div className="aspect-square flex items-center justify-center bg-muted">
-                  <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                    <span className="text-xs text-muted-foreground">Generating...</span>
-                  </div>
-                </div>
-              ) : isVideoProcessing(ad) || isVideoRetrying(ad) ? (
+              {ad.status === "processing" || isVideoProcessing(ad) || isVideoRetrying(ad) ? (
                 <div className="aspect-square flex items-center justify-center bg-muted relative">
                   {ad.generated_image_url || ad.product_image_url ? (
                     <img
@@ -209,18 +229,24 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
                   {(() => {
                     const statusInfo = getVideoStatusMessage(ad);
                     return (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                        <span className="text-sm text-white font-medium mb-2">{statusInfo.message}</span>
-                        {statusInfo.progress > 0 && (
-                          <div className="w-full max-w-[80%] space-y-1">
-                            <Progress value={statusInfo.progress} className="h-2" />
-                            <div className="flex justify-between text-xs text-white/70">
-                              <span>Progress</span>
-                              <span className="font-medium">{statusInfo.progress}%</span>
-                            </div>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4 animate-fade-in">
+                        <div className="relative mb-3">
+                          <Loader2 className="h-9 w-9 animate-spin text-primary" />
+                          <span className="absolute inset-0 rounded-full bg-primary/30 blur-md animate-pulse" aria-hidden />
+                        </div>
+                        <span className="text-sm text-white font-semibold text-center mb-2 leading-tight">
+                          {statusInfo.message}
+                        </span>
+                        <div className="w-full max-w-[85%] space-y-1">
+                          <Progress value={Math.max(statusInfo.progress, 2)} className="h-2" />
+                          <div className="flex justify-between text-[11px] text-white/80">
+                            <span>{statusInfo.eta ?? "Estimating…"}</span>
+                            <span className="font-medium">{statusInfo.progress > 0 ? `${statusInfo.progress}%` : "—"}</span>
                           </div>
-                        )}
+                        </div>
+                        <Badge variant="outline" className="mt-3 border-primary/40 bg-primary/10 text-[10px] text-white">
+                          Live
+                        </Badge>
                       </div>
                     );
                   })()}
