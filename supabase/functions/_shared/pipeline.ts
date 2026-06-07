@@ -298,21 +298,38 @@ async function generateSceneImage(args: {
     userContent.push({ type: "image_url", image_url: { url } });
   }
 
-  const res = await fetch(`${LOVABLE_AI_API}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      modalities: ["image", "text"],
-      messages: [{ role: "user", content: userContent }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Nano Banana failed: ${res.status} ${await res.text()}`);
-  const json = await res.json();
-  const b64 =
-    json?.choices?.[0]?.message?.images?.[0]?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "") ??
-    json?.choices?.[0]?.message?.content?.match(/data:image\/\w+;base64,([^"'\s)]+)/)?.[1];
-  if (!b64) throw new Error("Nano Banana returned no image");
+  // Nano Banana occasionally returns an empty image payload (safety filter
+  // hits, transient model errors). Retry a few times with backoff before
+  // surfacing the failure to the caller.
+  const MAX_ATTEMPTS = 3;
+  let b64: string | undefined;
+  let lastErr = "";
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const res = await fetch(`${LOVABLE_AI_API}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image",
+        modalities: ["image", "text"],
+        messages: [{ role: "user", content: userContent }],
+      }),
+    });
+    if (!res.ok) {
+      lastErr = `Nano Banana failed: ${res.status} ${await res.text()}`;
+    } else {
+      const json = await res.json();
+      b64 =
+        json?.choices?.[0]?.message?.images?.[0]?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "") ??
+        json?.choices?.[0]?.message?.content?.match(/data:image\/\w+;base64,([^"'\s)]+)/)?.[1];
+      if (b64) break;
+      lastErr = "Nano Banana returned no image";
+    }
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, 800 * attempt)); // 0.8s, 1.6s
+    }
+  }
+  if (!b64) throw new Error(lastErr || "Nano Banana returned no image");
+
 
   // Upload to permanent storage — versioned filename to bust caches on regen.
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
