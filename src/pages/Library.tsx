@@ -735,17 +735,35 @@ const Library = () => {
     }
   };
 
-  const handleRestitch = async (ad: GeneratedAd) => {
+  const handleRestitch = async (
+    ad: GeneratedAd,
+    overrides?: { falMaxAttempts?: number; toleranceSec?: number },
+  ) => {
     setRestitchingIds(prev => new Set(prev).add(ad.id));
     try {
       const res = await supabase.functions.invoke("stitch-lyric-video", {
-        body: { adId: ad.id },
+        body: { adId: ad.id, overrides },
       });
       if (res.error) throw res.error;
-      toast({
-        title: "Re-stitch started",
-        description: "fal.ai retries will run, falling back to Shotstack if needed.",
-      });
+      const via = (res.data as any)?.via ?? "unknown";
+      const drift = (res.data as any)?.drift?.delta;
+      if (via === "fal") {
+        toast({
+          title: "Re-stitch succeeded",
+          description: `fal.ai compose accepted${drift != null ? ` (drift ${Number(drift).toFixed(2)}s)` : ""}.`,
+        });
+      } else if (via === "shotstack") {
+        toast({
+          title: "Fell back to Shotstack",
+          description: `fal.ai exhausted retries${drift != null ? `; Shotstack drift ${Number(drift).toFixed(2)}s` : ""}.`,
+        });
+      } else {
+        toast({
+          title: "Re-stitch could not produce a clean cut",
+          description: "Published the first clip as a safety net. Check the audit trail.",
+          variant: "destructive",
+        });
+      }
       fetchAds();
     } catch (err: any) {
       console.error("Re-stitch error:", err);
