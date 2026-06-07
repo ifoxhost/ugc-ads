@@ -184,10 +184,8 @@ serve(async (req) => {
 
   } catch (e) {
     console.error("[slice-suno-audio] error:", e);
-    try {
-      const body = await req.clone().json().catch(() => ({}));
-      const failedAdId = body?.adId;
-      if (failedAdId) {
+    if (failedAdId) {
+      try {
         const sb2 = createClient(
           Deno.env.get("SUPABASE_URL")!,
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -205,8 +203,8 @@ serve(async (req) => {
             },
           },
         }).eq("id", failedAdId);
-      }
-    } catch (_) { /* ignore */ }
+      } catch (_) { /* ignore */ }
+    }
     return json({ error: e instanceof Error ? e.message : "Unknown" }, 500);
   }
 
