@@ -124,7 +124,13 @@ serve(async (req) => {
     const kieTasks: Array<{ sceneId: string; index: number; taskId: string; durationSec: number; referenceAudioUrl?: string }> = [];
     const failures: Array<{ sceneId: string; error: string }> = [];
 
-    for (const s of scenes) {
+    // Map plan tier → Seedance resolution (Kie only supports 480p / 720p).
+    const planTier = String((adCopy as any).planTier ?? (adCopy as any).quality ?? "").toLowerCase();
+    const seedanceResolution: "480p" | "720p" =
+      planTier === "starter" || planTier === "sd" ? "480p" : "720p";
+
+    for (let i = 0; i < scenes.length; i++) {
+      const s = scenes[i];
       const sceneDur = Math.max(1, Number(s.end_sec) - Number(s.start_sec));
       const clipDur = kieModel.kind === "seedance"
         ? seedanceDuration(sceneDur)
@@ -149,13 +155,20 @@ serve(async (req) => {
             durationSec: clipDur,
             aspectRatio: aspect,
             referenceAudioUrl: refAudio,
+            resolution: seedanceResolution,
           },
         });
         kieTasks.push({ sceneId: s.id, index: s.index, taskId, durationSec: clipDur, referenceAudioUrl: refAudio });
       } catch (e) {
         failures.push({ sceneId: s.id, error: (e as Error).message });
       }
+      // Small inter-scene delay to avoid hammering Kie's submit endpoint
+      // (helps when the upstream model has per-second request caps).
+      if (i < scenes.length - 1) {
+        await new Promise((r) => setTimeout(r, 600));
+      }
     }
+
 
     if (kieTasks.length === 0) {
       return new Response(JSON.stringify({ error: "All Kie submissions failed", failures }),
