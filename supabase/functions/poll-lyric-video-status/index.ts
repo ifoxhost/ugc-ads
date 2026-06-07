@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { pollKieTask } from "../_shared/pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,76 +9,72 @@ const corsHeaders = {
 
 const MAX_PROCESSING_MINUTES = 15;
 
-// Kie.ai pipeline is fully asynchronous: n8n / Kie.ai POST the final video URL
-// to /functions/v1/ugc-webhook-callback. This poll job only enforces timeouts
-// on stuck renders — Shotstack has been fully removed.
+// Polls Kie.ai directly for in-flight lyric-video renders. No n8n callbacks.
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const supabaseUrl        = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    console.log("=== LYRIC VIDEO POLL JOB (Kie.ai callback-only mode) ===");
-
-    const { data: pendingAds, error: fetchError } = await supabase
-      .from("generated_ads")
-      .select("id, video_status, created_at, video_last_checked_at")
-      .in("video_status", ["queued", "processing"])
+    const { data: pending } = await sb.from("generated_ads")
+      .select("id, user_id, video_task_id, created_at, ad_copy")
+      .in("video_status", ["queued","processing"])
       .like("prompt_used", "BeatFrame lyric video%")
       .order("video_last_checked_at", { ascending: true, nullsFirst: true })
-      .limit(50);
-
-    if (fetchError) throw fetchError;
-    if (!pendingAds || pendingAds.length === 0) {
-      return new Response(
-        JSON.stringify({ success: true, message: "No pending lyric videos", processed: 0 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      .limit(40);
+    if (!pending || pending.length === 0) {
+      return new Response(JSON.stringify({ success: true, processed: 0 }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    let timedOut = 0;
-    let stillProcessing = 0;
+    let done = 0, failed = 0, still = 0;
     const now = new Date();
-
-    for (const ad of pendingAds) {
-      const ageMin = (now.getTime() - new Date(ad.created_at).getTime()) / 1000 / 60;
+    for (const ad of pending) {
+      const ageMin = (now.getTime() - new Date(ad.created_at).getTime()) / 60000;
       if (ageMin > MAX_PROCESSING_MINUTES) {
-        await supabase
-          .from("generated_ads")
-          .update({
-            status: "video_failed",
-            video_status: "failed",
+        await sb.from("generated_ads").update({
+          status: "video_failed", video_status: "failed",
+          video_last_checked_at: now.toISOString(),
+        }).eq("id", ad.id);
+        failed++;
+        continue;
+      }
+      if (!ad.video_task_id) {
+        await sb.from("generated_ads").update({ video_last_checked_at: now.toISOString() }).eq("id", ad.id);
+        still++;
+        continue;
+      }
+      try {
+        const { status, videoUrl } = await pollKieTask(ad.video_task_id);
+        if (videoUrl && (status === "completed" || status === "success" || status === "succeeded")) {
+          await sb.from("generated_ads").update({
+            status: "completed", video_status: "completed",
+            video_progress: 100, generated_video_url: videoUrl,
+            completed_at: now.toISOString(), video_last_checked_at: now.toISOString(),
+            ad_copy: { ...(ad.ad_copy as any ?? {}), pipelineStage: "done" },
+          }).eq("id", ad.id);
+          await sb.rpc("consume_credit", { _user_id: ad.user_id, _amount: 3 });
+          done++;
+        } else if (status === "failed" || status === "error") {
+          await sb.from("generated_ads").update({
+            status: "video_failed", video_status: "failed",
             video_last_checked_at: now.toISOString(),
-          })
-          .eq("id", ad.id);
-        timedOut++;
-      } else {
-        await supabase
-          .from("generated_ads")
-          .update({ video_last_checked_at: now.toISOString() })
-          .eq("id", ad.id);
-        stillProcessing++;
+          }).eq("id", ad.id);
+          failed++;
+        } else {
+          await sb.from("generated_ads").update({ video_last_checked_at: now.toISOString() }).eq("id", ad.id);
+          still++;
+        }
+      } catch (e) {
+        console.error("poll error for", ad.id, (e as Error).message);
+        await sb.from("generated_ads").update({ video_last_checked_at: now.toISOString() }).eq("id", ad.id);
+        still++;
       }
     }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Polled ${pendingAds.length} ads`,
-        timedOut,
-        stillProcessing,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("[poll-lyric-video-status] error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true, done, failed, still, processed: pending.length }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (e) {
+    console.error("[poll-lyric-video-status] error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

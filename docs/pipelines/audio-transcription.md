@@ -1,22 +1,23 @@
 # Audio Transcription
 
-## When it runs
-Only when the user uploads audio (or Suno didn't expose lyrics) and the
-`lyrics` field is empty.
+## Purpose
+Produce word-level timings so storyboard scenes can be aligned to the song
+and so the renderer can place lyric typography on the beat.
 
-## Provider
-OpenAI (Whisper) via Lovable AI Gateway. No third-party transcription
-service is allowed — Suno / OpenAI / Pexels are the only non-Kie.ai
-external services in the pipeline.
+## Provider chain (with fallback)
+1. **ElevenLabs Scribe via Kie.ai** — `POST https://api.kie.ai/v1/audio/transcribe`
+   with `{ provider: "elevenlabs", audioUrl, model: "scribe_v1" }`.
+   Secret: `KIE_AI_API_KEY`.
+2. **ElevenLabs direct** — multipart upload to
+   `https://api.elevenlabs.io/v1/speech-to-text`, `model_id=scribe_v1`.
+   Secret: `ELEVENLABS_API_KEY`.
+3. **OpenAI Whisper-1** — multipart upload to
+   `https://api.openai.com/v1/audio/transcriptions`,
+   `response_format=verbose_json`. Secret: `OPENAI_API_KEY`.
 
-## Steps
-1. Client uploads audio to the `video-references` Supabase storage bucket.
-2. Edge function fetches the audio and forwards it to OpenAI Whisper.
-3. Response (`segments[]` with timestamps) is reduced to:
-   ```
-   [00:14.20] First line of lyrics
-   [00:18.05] Second line
-   ...
-   ```
-4. The timestamped lyric block populates `LyricVideoFormData.lyrics`
-   and is used by Kie.ai to time clip transitions on the beat.
+The orchestrator tries them in order and stores the first successful response
+on `generated_ads.ad_copy.transcription`. If all three fail, the pipeline
+continues without word timing and notes `transcription.error`.
+
+## Called from
+`supabase/functions/_shared/pipeline.ts → runTranscription()`.

@@ -1,33 +1,19 @@
-# Suno Import + Lyrics
+# Suno Import & Lyrics
+
+## Purpose
+Parse a Suno share link or pasted lyrics into `{ songTitle, artist, lyrics,
+audioFileUrl, duration }`. This becomes the input to the orchestrator (see
+[orchestrator.md](./orchestrator.md)).
 
 ## UI
-`src/components/lyric/SunoLinkParser.tsx` — user pastes a `https://suno.com/song/<id>` URL.
+`src/components/lyric/SunoLinkParser.tsx` + `LyricEditor.tsx`.
 
 ## Edge function
-`supabase/functions/suno-parse/index.ts`
+`supabase/functions/suno-parse/index.ts` — fetches the Suno page and extracts
+title, artist, lyrics, and the public mp3 URL. Falls back to manual paste when
+parsing fails.
 
-1. Extracts the song id from the URL.
-2. Calls Suno's public song endpoint (no API key required for shared songs).
-3. Returns:
-   - `title`, `artist`, `coverImage`
-   - `audioUrl` (MP3 stream) — re-hosted client-side if needed
-   - `lyrics` (when available)
-   - `genre`, `duration`, `bpm` (best effort)
-
-## Fallback
-If Suno does not expose lyrics for a track, the form prompts the user to:
-- paste lyrics manually, **or**
-- upload the audio for OpenAI Whisper transcription
-  (see [audio-transcription.md](./audio-transcription.md)).
-
-## Output contract → `LyricVideoFormData`
-```ts
-{
-  songTitle: string;
-  artist: string;
-  lyrics: string;
-  audioFileUrl: string | null;  // direct Suno mp3 URL
-  bpm: number;
-}
-```
-No mock data — the form only populates from a real `suno-parse` response.
+## Downstream
+- `lyrics` → OpenAI `gpt-4o` script stage
+- `audioFileUrl` → transcription stage (ElevenLabs/Kie → Whisper)
+- `duration` → used to time scenes

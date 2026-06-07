@@ -559,6 +559,57 @@ export type Database = {
         }
         Relationships: []
       }
+      video_scenes: {
+        Row: {
+          ad_id: string
+          created_at: string
+          end_sec: number
+          error_message: string | null
+          id: string
+          image_status: string
+          image_url: string | null
+          index: number
+          lyric_lines: string[]
+          prompt: Json
+          regen_count: number
+          start_sec: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ad_id: string
+          created_at?: string
+          end_sec?: number
+          error_message?: string | null
+          id?: string
+          image_status?: string
+          image_url?: string | null
+          index: number
+          lyric_lines?: string[]
+          prompt?: Json
+          regen_count?: number
+          start_sec?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ad_id?: string
+          created_at?: string
+          end_sec?: number
+          error_message?: string | null
+          id?: string
+          image_status?: string
+          image_url?: string | null
+          index?: number
+          lyric_lines?: string[]
+          prompt?: Json
+          regen_count?: number
+          start_sec?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

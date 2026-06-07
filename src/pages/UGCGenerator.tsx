@@ -37,6 +37,7 @@ import confetti from "canvas-confetti";
 import OutputGallery from "@/components/ugc/OutputGallery";
 import SubscriptionPlansDialog from "@/components/SubscriptionPlansDialog";
 import LyricVideoForm, { LyricVideoFormData, DEFAULT_LYRIC_FORM } from "@/components/lyric/LyricVideoForm";
+import StoryboardStage from "@/components/lyric/StoryboardStage";
 import RenderProgressBar from "@/components/lyric/RenderProgressBar";
 import StoryboardEditor from "@/components/lyric/StoryboardEditor";
 
@@ -158,6 +159,7 @@ const UGCGenerator = () => {
   const [user, setUser] = useState<any>(null);
   const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"form" | "progress">("form");
+  const [activeAdId, setActiveAdId] = useState<string | null>(null);
   const [editingStoryboardAd, setEditingStoryboardAd] = useState<any | null>(null);
 
   // Active Project & Pipeline Tracking
@@ -759,9 +761,12 @@ const UGCGenerator = () => {
 
       if (error) throw error;
 
+      const firstAdId = (data as { adIds?: string[] } | null)?.adIds?.[0] ?? null;
+      if (firstAdId) setActiveAdId(firstAdId);
+
       toast({
         title: "AI Production Pipeline Started!",
-        description: "Your music video project is compiling across 5 analysis & rendering stages.",
+        description: "Script → transcription → storyboard frames are generating now.",
       });
 
       setFormData(DEFAULT_LYRIC_FORM);
@@ -1067,6 +1072,9 @@ const UGCGenerator = () => {
 
           {/* ── Tab 2: Live Processing & Pipeline ── */}
           <TabsContent value="progress" className="space-y-8 mt-0 animate-fade-in max-w-5xl mx-auto">
+            {activeAdId && (
+              <StoryboardStage adId={activeAdId} onClose={() => setActiveAdId(null)} />
+            )}
             {activeProject && activeProject.status === "processing" ? (
               <div className="space-y-6">
                 {/* Master Timeline Banner */}
