@@ -54,7 +54,7 @@ const Careers = () => {
           </span>
         </h1>
         <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-          We're building the fastest way to turn music into stunning lyric videos. Join us.
+          We're building the fastest way to turn music into stunning AI music videos. Join us.
         </p>
       </section>
 

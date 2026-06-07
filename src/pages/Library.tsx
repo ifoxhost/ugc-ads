@@ -227,7 +227,7 @@ const Library = () => {
     ad: null,
   });
 
-  // Dedicated lyric video player modal state
+  // Dedicated AI music video player modal state
   const [lyricPlayer, setLyricPlayer] = useState<{
     isOpen: boolean;
     ad: GeneratedAd | null;
@@ -437,13 +437,13 @@ const Library = () => {
         (payload) => {
           const updated = payload.new as GeneratedAd;
           const prevStatus = prevStatusMapRef.current.get(updated.id);
-          // Fire toast when a lyric video transitions to completed
+          // Fire toast when a AI music video transitions to completed
           if (
             isLyricVideo(updated) &&
             prevStatus === 'processing' &&
             updated.status === 'completed'
           ) {
-            const title  = (updated.ad_copy as AdCopy | null)?.title || "Your lyric video";
+            const title  = (updated.ad_copy as AdCopy | null)?.title || "Your AI music video";
             const artist = (updated.ad_copy as AdCopy | null)?.artist;
             toast({
               title: "🎬 Video ready!",
@@ -1152,7 +1152,7 @@ const Library = () => {
         </div>
       )}
 
-      {/* Render progress bar — shows when lyric video jobs are active */}
+      {/* Render progress bar — shows when AI music video jobs are active */}
       <RenderProgressBar pollInterval={5000} className="mb-6" />
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1322,7 +1322,7 @@ const Library = () => {
         <div className="text-center py-20">
           <Image className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />
           <p className="text-muted-foreground text-lg">No videos yet</p>
-          <p className="text-muted-foreground text-sm mt-2">Create your first lyric video to see it here</p>
+          <p className="text-muted-foreground text-sm mt-2">Create your first AI music video to see it here</p>
         </div>
       ) : filteredAndSortedAds.length === 0 ? (
         <div className="text-center py-20">
@@ -1342,7 +1342,7 @@ const Library = () => {
               </TabsTrigger>
               <TabsTrigger value="lyric">
                 <Music2 className="h-4 w-4 md:mr-2" />
-                <span className="hidden md:inline">Lyric Videos ({lyricAds.length})</span>
+                <span className="hidden md:inline">AI Music Videos ({lyricAds.length})</span>
               </TabsTrigger>
               <TabsTrigger value="images">
                 <Image className="h-4 w-4 md:mr-2" />
@@ -1384,7 +1384,7 @@ const Library = () => {
                   </Button>
                 )}
 
-                {/* Batch Regenerate Failed Lyric Videos */}
+                {/* Batch Regenerate Failed AI Music Videos */}
                 {(() => {
                   const failedLyricCount = ads.filter(
                     a => isLyricVideo(a) && (a.status === 'failed' || a.status === 'video_failed') && a.ad_copy
@@ -1420,8 +1420,8 @@ const Library = () => {
             {lyricAds.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Music2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No lyric videos yet</p>
-                <p className="text-xs mt-1">Create your first lyric video on the Create page</p>
+                <p>No AI music videos yet</p>
+                <p className="text-xs mt-1">Create your first AI music video on the Create page</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1621,7 +1621,7 @@ const Library = () => {
               </div>
             )}
 
-            {/* Render diagnostics (lyric videos) */}
+            {/* Render diagnostics (AI music videos) */}
             {mediaViewer.ad && isLyricVideo(mediaViewer.ad) && mediaViewer.ad.ad_copy?.stitchValidation && (
               <div className="p-4 border-t space-y-2">
                 <h3 className="font-semibold text-lg">Render details</h3>
@@ -2049,7 +2049,7 @@ const Library = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Lyric Video Player Modal */}
+      {/* AI Music Video Player Modal */}
       <LyricVideoPlayerModal
         isOpen={lyricPlayer.isOpen}
         ad={lyricPlayer.ad}
@@ -2203,7 +2203,7 @@ const Library = () => {
                 />
               )}
               
-              {/* Hover Overlay — waveform bars for lyric videos, play icon for others */}
+              {/* Hover Overlay — waveform bars for AI music videos, play icon for others */}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 {isLyric ? (
                   <div className="flex flex-col items-center gap-3">
@@ -2237,7 +2237,7 @@ const Library = () => {
                 {isLyric ? (
                   <Badge className="text-xs bg-primary/90 text-primary-foreground gap-1">
                     <Music2 className="h-3 w-3" />
-                    Lyric Video
+                    AI Music Video
                   </Badge>
                 ) : (
                   <Badge variant="secondary" className="text-xs">
@@ -2340,7 +2340,7 @@ const Library = () => {
                 {new Date(ad.created_at).toLocaleDateString()}
               </p>
               <div className="flex items-center gap-1">
-                {/* Duration badge for completed lyric videos */}
+                {/* Duration badge for completed AI music videos */}
                 {isLyric && isCompleted && (() => {
                   const dur = estimateDuration(ad.ad_copy?.lyricsPreview);
                   return dur ? (
@@ -2408,7 +2408,7 @@ const Library = () => {
   }
 };
 
-// ─── Lyric Video Player Modal ────────────────────────────────────────────────
+// ─── AI Music Video Player Modal ────────────────────────────────────────────────
 interface LyricVideoPlayerModalProps {
   isOpen: boolean;
   ad: GeneratedAd | null;
@@ -2507,7 +2507,7 @@ function LyricVideoPlayerModal({ isOpen, ad, onClose, onDownload, onDelete, onSh
               <div className="flex items-center gap-2 mb-1">
                 <Music2 className="h-4 w-4 text-primary flex-shrink-0" />
                 <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Lyric Video
+                  AI Music Video
                 </span>
               </div>
               <h2 className="text-xl font-bold leading-tight">{title}</h2>

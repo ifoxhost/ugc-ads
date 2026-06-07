@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Loader2, RefreshCw, Sparkles, Film, Music2,
-  ImageIcon, AlertTriangle, Check, Wand2, Save, Download, Play,
+  ImageIcon, AlertTriangle, Check, Wand2, Save, Download, Play, Pause, Eye,
 } from "lucide-react";
 
 interface Props {
@@ -226,6 +226,11 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
     }
   };
 
+  const saveAndRegenScene = async (scene: Scene) => {
+    await saveScene(scene);
+    await regenScene(scene);
+  };
+
   const renderClips = async () => {
     if (!allReady) {
       toast({
@@ -358,13 +363,33 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                 </Button>
               )}
             </div>
-            {isRendering && <Progress value={videoProgress} className="h-2" />}
-            {videoUrl && (
+            {/* Aggregate storyboard progress */}
+            {scenes.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>Storyboard images</span>
+                  <span>{readyCount}/{scenes.length} ready</span>
+                </div>
+                <Progress value={(readyCount / scenes.length) * 100} className="h-2" />
+              </div>
+            )}
+            {isRendering && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>Render progress</span>
+                  <span>{videoProgress}%</span>
+                </div>
+                <Progress value={videoProgress} className="h-2" />
+              </div>
+            )}
+            {videoUrl ? (
               <video
                 src={videoUrl}
                 controls
                 className="w-full max-h-[60vh] rounded-lg bg-black"
               />
+            ) : (
+              <TimelinePreview scenes={scenes} audioUrl={audioUrl} />
             )}
           </CardContent>
         </Card>
@@ -497,7 +522,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                         <p className="text-[11px] text-destructive">{scene.error_message}</p>
                       )}
 
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -512,6 +537,15 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                           )}
                           Save edits
                         </Button>
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => saveAndRegenScene(scene)}
+                          disabled={savingId === scene.id || busy || scene.image_status === "generating"}
+                        >
+                          <Wand2 className="h-3.5 w-3.5" />
+                          Save & regenerate
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -523,4 +557,128 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
       </main>
     </div>
   );
+}
+
+// ── Timeline Preview ────────────────────────────────────────────────────────
+// Lightweight pre-stitch preview: plays the imported audio and crossfades
+// through the storyboard images at their start_sec/end_sec timestamps so
+// the user can sanity-check pacing before paying for a full render.
+function TimelinePreview({
+  scenes,
+  audioUrl,
+}: {
+  scenes: Scene[];
+  audioUrl: string | null;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [t, setT] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const orderedReady = useMemo(
+    () => scenes.filter((s) => s.image_url).sort((a, b) => a.index - b.index),
+    [scenes],
+  );
+
+  const activeScene = useMemo(() => {
+    if (orderedReady.length === 0) return null;
+    const match = orderedReady.find((s) => t >= Number(s.start_sec) && t < Number(s.end_sec));
+    return match ?? orderedReady[orderedReady.length - 1];
+  }, [orderedReady, t]);
+
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const onTime = () => setT(a.currentTime);
+    const onMeta = () => setDuration(a.duration || 0);
+    const onEnd = () => setPlaying(false);
+    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("loadedmetadata", onMeta);
+    a.addEventListener("ended", onEnd);
+    return () => {
+      a.removeEventListener("timeupdate", onTime);
+      a.removeEventListener("loadedmetadata", onMeta);
+      a.removeEventListener("ended", onEnd);
+    };
+  }, [audioUrl]);
+
+  const toggle = async () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playing) { a.pause(); setPlaying(false); }
+    else { await a.play(); setPlaying(true); }
+  };
+
+  if (orderedReady.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center text-xs text-muted-foreground">
+        <Eye className="h-5 w-5 mx-auto mb-2 opacity-60" />
+        Generate storyboard images to enable timeline preview.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+        {activeScene?.image_url && (
+          <img
+            src={activeScene.image_url}
+            alt={`Scene ${(activeScene.index ?? 0) + 1}`}
+            className="w-full h-full object-cover transition-opacity duration-300"
+          />
+        )}
+        <div className="absolute bottom-2 left-2 right-2 flex items-center gap-2 bg-background/70 backdrop-blur rounded-md px-2 py-1.5">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={toggle} disabled={!audioUrl}>
+            {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          <span className="text-[10px] tabular-nums text-muted-foreground w-16">
+            {formatTime(t)} / {formatTime(duration)}
+          </span>
+          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: duration > 0 ? `${(t / duration) * 100}%` : "0%" }}
+            />
+          </div>
+          {activeScene && (
+            <Badge variant="secondary" className="text-[10px] h-5">
+              Scene {activeScene.index + 1}/{orderedReady.length}
+            </Badge>
+          )}
+        </div>
+      </div>
+      {audioUrl ? (
+        <audio ref={audioRef} src={audioUrl} preload="metadata" className="hidden" />
+      ) : (
+        <p className="text-[11px] text-muted-foreground text-center">
+          No audio attached — preview is silent.
+        </p>
+      )}
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {orderedReady.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => {
+              const a = audioRef.current;
+              if (a) { a.currentTime = Number(s.start_sec) || 0; setT(a.currentTime); }
+            }}
+            className={`shrink-0 w-16 aspect-video rounded border-2 overflow-hidden transition-all ${
+              activeScene?.id === s.id ? "border-primary" : "border-transparent opacity-70 hover:opacity-100"
+            }`}
+            title={`Scene ${s.index + 1} — ${formatTime(Number(s.start_sec))}`}
+          >
+            <img src={s.image_url!} alt="" className="w-full h-full object-cover" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatTime(s: number): string {
+  if (!isFinite(s) || s < 0) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
 }

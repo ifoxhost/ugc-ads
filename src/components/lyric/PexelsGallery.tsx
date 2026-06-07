@@ -610,7 +610,7 @@ export default function PexelsGallery({ onUseAsBackground }: {
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary mt-0.5">•</span>
-              Select a background in the lyric video form to use it directly
+              Select a background in the AI music video form to use it directly
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary mt-0.5">•</span>

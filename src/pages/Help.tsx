@@ -7,12 +7,12 @@ const Help = () => {
       title: "Getting Started",
       items: [
         {
-          q: "How do I create my first lyric video?",
-          a: "Navigate to Create from the sidebar. Choose Suno Link or Manual Entry, fill in your song details, pick a template, set your aspect ratio, and click Generate Lyric Video."
+          q: "How do I create my first AI music video?",
+          a: "Navigate to Create from the sidebar. Choose Suno Link or Manual Entry, fill in your song details, pick a template, set your aspect ratio, and click Generate AI Music Video."
         },
         {
           q: "Do I need a subscription?",
-          a: "Yes, a subscription is required to generate lyric videos. Visit Pricing to choose a plan that fits your needs."
+          a: "Yes, a subscription is required to generate AI music videos. Visit Pricing to choose a plan that fits your needs."
         },
       ]
     },
@@ -57,7 +57,7 @@ const Help = () => {
       title: "Downloading & Using Videos",
       items: [
         {
-          q: "How do I download my lyric video?",
+          q: "How do I download my AI music video?",
           a: "Go to your Library and click the download button on any completed video. Videos are delivered as MP4 files compatible with all major social media platforms."
         },
         {
@@ -72,7 +72,7 @@ const Help = () => {
       items: [
         {
           q: "How do credits work?",
-          a: "Each lyric video generation consumes credits from your subscription. Your plan's monthly credit allowance resets on your billing date. View your remaining credits on the Dashboard."
+          a: "Each AI music video generation consumes credits from your subscription. Your plan's monthly credit allowance resets on your billing date. View your remaining credits on the Dashboard."
         },
         {
           q: "Am I charged if a video fails?",

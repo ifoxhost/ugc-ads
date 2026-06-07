@@ -65,7 +65,7 @@ export const NewUserOnboarding = ({ onDismiss }: NewUserOnboardingProps) => {
             </div>
             <div>
               <CardTitle className="text-xl">Welcome to SongDoe!</CardTitle>
-              <CardDescription>Create your first lyric video in 3 simple steps</CardDescription>
+              <CardDescription>Create your first AI music video in 3 simple steps</CardDescription>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={handleSkip}>
