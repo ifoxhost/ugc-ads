@@ -1394,6 +1394,37 @@ const Library = () => {
             </SelectContent>
           </Select>
 
+          {/* Expiry Filter */}
+          <Select value={expiryFilter} onValueChange={setExpiryFilter}>
+            <SelectTrigger className="w-[170px]">
+              <Clock className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Expiry" />
+            </SelectTrigger>
+            <SelectContent>
+              {EXPIRY_FILTER_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Duration Filter */}
+          <Select value={durationFilter} onValueChange={setDurationFilter}>
+            <SelectTrigger className="w-[170px]">
+              <Timer className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Duration" />
+            </SelectTrigger>
+            <SelectContent>
+              {DURATION_FILTER_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+
           {/* Sorting */}
           <div className="flex items-center gap-2">
             <Select value={sortBy} onValueChange={setSortBy}>
