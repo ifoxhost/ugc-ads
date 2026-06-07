@@ -2220,6 +2220,11 @@ const Library = () => {
                   src={ad.generated_video_url!}
                   className="w-full h-full object-cover"
                   muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}); }}
+                  onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                 />
               ) : (
                 <img 
