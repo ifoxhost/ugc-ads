@@ -181,6 +181,7 @@ const Library = () => {
   const [ads, setAds] = useState<GeneratedAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [copiedSliceKey, setCopiedSliceKey] = useState<string | null>(null);
   const [editingStoryboardAd, setEditingStoryboardAd] = useState<any | null>(null);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
