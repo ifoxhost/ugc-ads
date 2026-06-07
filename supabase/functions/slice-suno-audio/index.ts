@@ -64,23 +64,47 @@ serve(async (req) => {
     const audioUrl: string | undefined = adCopy.audioFileUrl;
     if (!audioUrl) return json({ error: "No audioFileUrl on this ad" }, 400);
 
+    // Real-time progress: write a tiny `sliceStatus` object to ad_copy on
+    // each phase so the Library UI (which subscribes to row updates) can
+    // surface queued → uploading → slicing → validating → done/failed.
+    const writeStatus = async (
+      phase: "queued" | "uploading" | "slicing" | "validating" | "done" | "failed",
+      extra: Record<string, unknown> = {},
+    ) => {
+      const { data: row } = await sb
+        .from("generated_ads").select("ad_copy").eq("id", adId).maybeSingle();
+      const cur = (row?.ad_copy ?? {}) as Record<string, any>;
+      await sb.from("generated_ads").update({
+        ad_copy: {
+          ...cur,
+          sliceStatus: { phase, at: new Date().toISOString(), ...extra },
+        },
+      }).eq("id", adId);
+    };
+
+    await writeStatus("queued");
+
     // 1) Upload audio to Cloudinary once. Cached on ad_copy for retries.
     let uploaded: UploadedAudio | null = adCopy.cloudinaryAudio ?? null;
     if (!uploaded || force) {
+      await writeStatus("uploading");
       uploaded = await uploadAudioByUrl(cld, audioUrl, `lyricavid/${user.id}`);
     }
 
     // 2) Pull scenes, derive ≤15s windows aligned to start_sec.
+    await writeStatus("slicing");
     const { data: scenes } = await sb.from("video_scenes")
       .select("id, index, start_sec, end_sec")
       .eq("ad_id", adId).order("index", { ascending: true });
-    if (!scenes || scenes.length === 0) return json({ error: "No scenes" }, 400);
+    if (!scenes || scenes.length === 0) {
+      await writeStatus("failed", { error: "No scenes" });
+      return json({ error: "No scenes" }, 400);
+    }
 
     const totalDuration = uploaded.durationSec || Number(adCopy.duration) || 0;
     const slices: SceneSlice[] = scenes.map((s: any) => {
       const sceneLen = Math.max(1, Number(s.end_sec) - Number(s.start_sec));
       const dur = Math.min(MAX_SLICE_SEC, Math.round(sceneLen));
-      // Clamp the window so we never seek past the end of the song.
       const maxStart = Math.max(0, (totalDuration || 0) - dur);
       const start = Math.max(0, Math.min(Number(s.start_sec) || 0, maxStart));
       return {
@@ -93,7 +117,7 @@ serve(async (req) => {
     });
 
     // 2b) Validate each slice against Seedance limits (max 3 / 15s).
-    //     We store per-scene violations so the UI can surface them.
+    await writeStatus("validating", { sliceCount: slices.length });
     const sliceErrors: Array<{ sceneId: string; index: number; reason: string; durationSec: number }> = [];
     for (const sl of slices) {
       try {
@@ -119,17 +143,42 @@ serve(async (req) => {
       }
     }
 
-    // 3) Persist slices + cached Cloudinary metadata.
+    // 2c) Job-level validator (max 3 files / 15s total per job).
+    const jobValidation = validateJobSeedanceAudioRefs(slices);
+
+    // 3) Persist slices + cached Cloudinary metadata + validation summary.
+    const { data: latest } = await sb
+      .from("generated_ads").select("ad_copy").eq("id", adId).maybeSingle();
+    const merged = (latest?.ad_copy ?? {}) as Record<string, any>;
     const newCopy = {
-      ...adCopy,
+      ...merged,
       cloudinaryAudio: uploaded,
       sceneAudioSlices: slices,
       sceneAudioSliceErrors: sliceErrors,
+      sceneAudioJobValidation: jobValidation,
       sceneAudioSlicesGeneratedAt: new Date().toISOString(),
+      sliceStatus: {
+        phase: "done",
+        at: new Date().toISOString(),
+        sliceCount: slices.length,
+        errorCount: sliceErrors.length,
+        jobValid: jobValidation.valid,
+      },
     };
     const { error: upErr } = await sb.from("generated_ads")
       .update({ ad_copy: newCopy }).eq("id", adId);
     if (upErr) throw upErr;
+
+    return json({
+      success: true,
+      count: slices.length,
+      errorCount: sliceErrors.length,
+      cloudinaryPublicId: uploaded.publicId,
+      sourceDurationSec: uploaded.durationSec,
+      slices,
+      errors: sliceErrors,
+      jobValidation,
+    });
 
     return json({
       success: true,
