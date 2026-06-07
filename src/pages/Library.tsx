@@ -858,6 +858,10 @@ const Library = () => {
 
   const handleReslice = async (ad: GeneratedAd) => {
     setReslicingIds(prev => new Set(prev).add(ad.id));
+    // Allow toasts to fire again for this ad's next terminal state.
+    firedTerminalToastsRef.current.delete(`${ad.id}:done`);
+    firedTerminalToastsRef.current.delete(`${ad.id}:failed`);
+
     try {
       const res = await supabase.functions.invoke("slice-suno-audio", {
         body: { adId: ad.id, force: true },
