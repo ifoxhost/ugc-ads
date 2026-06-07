@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireSecrets, jsonError } from "../_shared/startup-checks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,12 +38,26 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl        = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAnonKey    = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const n8nWebhookUrl      = Deno.env.get("N8N_WEBHOOK_URL");
-    const n8nWebhookSecret   = Deno.env.get("N8N_WEBHOOK_SECRET");
-    const kieApiKey          = Deno.env.get("KIE_AI_API_KEY");
+    // Fail fast if any required secret is missing — returns 503 with clear error.
+    let env: Record<string, string>;
+    try {
+      env = requireSecrets([
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_ANON_KEY",
+        "N8N_WEBHOOK_URL",
+        "N8N_WEBHOOK_SECRET",
+        "KIE_AI_API_KEY",
+      ]);
+    } catch (e) {
+      return jsonError(e, corsHeaders);
+    }
+    const supabaseUrl        = env.SUPABASE_URL;
+    const supabaseServiceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseAnonKey    = env.SUPABASE_ANON_KEY;
+    const n8nWebhookUrl      = env.N8N_WEBHOOK_URL;
+    const n8nWebhookSecret   = env.N8N_WEBHOOK_SECRET;
+    const kieApiKey          = env.KIE_AI_API_KEY;
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
