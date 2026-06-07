@@ -220,28 +220,41 @@ export default function StoryboardStage({ adId, onClose }: Props) {
                   <p className="text-[11px] text-muted-foreground italic line-clamp-2">"{s.lyric_lines.join(" / ")}"</p>
                 )}
                 {s.error_message && (
-                  <p className="text-[11px] text-destructive">{s.error_message}</p>
+                  <p className="text-[11px] text-destructive line-clamp-2">{s.error_message}</p>
                 )}
-                <Button
-                  size="sm"
-                  variant={s.image_status === "failed" ? "destructive" : "outline"}
-                  className="w-full"
-                  disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
-                  onClick={() => handleRegen(s.id)}>
-                  {regenLoading === s.id || s.image_status === "generating" ? (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3 h-3 mr-1" />
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant={s.image_status === "failed" ? "destructive" : "outline"}
+                    className="flex-1"
+                    disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
+                    onClick={() => handleRegen(s.id)}>
+                    {regenLoading === s.id || s.image_status === "generating" ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                    )}
+                    {s.image_status === "failed"
+                      ? "Retry failed"
+                      : <>Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}</>}
+                  </Button>
+                  {s.image_status === "failed" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="px-2"
+                      onClick={() => setDetailsScene(s)}
+                      title="View error details">
+                      <Info className="w-3 h-3" />
+                    </Button>
                   )}
-                  {s.image_status === "failed"
-                    ? "Retry failed"
-                    : <>Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}</>}
-                </Button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
 
       {/* Action bar */}
       <div className="flex items-center justify-between gap-3 sticky bottom-4 bg-card/95 backdrop-blur border border-border rounded-2xl p-4">
