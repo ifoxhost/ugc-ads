@@ -311,7 +311,22 @@ async function generateSceneImage(args: {
   return { url: pub.publicUrl };
 }
 
-async function runStoryboard(adId: string, songTitle: string, referenceImageUrl: string | null, userId: string) {
+// Resolve reference image URLs for an ad — combines persisted refs + pexels +
+// fallback to product_image_url. Always returns permanent URLs.
+function resolveAdReferences(adCopy: Record<string, unknown>, productImageUrl: string | null): string[] {
+  const arr = Array.isArray(adCopy.referenceImages) ? (adCopy.referenceImages as string[]) : [];
+  const out = [...arr];
+  const pexels = adCopy.pexelsBackgroundUrl as string | undefined;
+  const single = adCopy.referenceImageUrl as string | undefined;
+  if (single && !out.includes(single)) out.push(single);
+  if (pexels && !out.includes(pexels)) out.push(pexels);
+  if (out.length === 0 && productImageUrl && !productImageUrl.includes("placehold.co")) {
+    out.push(productImageUrl);
+  }
+  return out.filter(Boolean).slice(0, 4);
+}
+
+async function runStoryboard(adId: string, songTitle: string, referenceImageUrls: string[], userId: string) {
   const sb = service();
   const { data: scenes } = await sb
     .from("video_scenes")
@@ -320,10 +335,8 @@ async function runStoryboard(adId: string, songTitle: string, referenceImageUrl:
     .order("index", { ascending: true });
   if (!scenes || scenes.length === 0) throw new Error("No scenes to render");
 
-  // Mark all generating
   await sb.from("video_scenes").update({ image_status: "generating" }).eq("ad_id", adId);
 
-  // Parallel pool of size NANO_BANANA_CONCURRENCY
   let cursor = 0;
   let done = 0;
   const total = scenes.length;
@@ -336,7 +349,7 @@ async function runStoryboard(adId: string, songTitle: string, referenceImageUrl:
         const { url } = await generateSceneImage({
           sceneId: s.id,
           prompt: s.prompt as SceneSpec["prompt"],
-          referenceImageUrl,
+          referenceImageUrls,
           songTitle,
           userId,
         });
@@ -365,7 +378,7 @@ export interface OrchestrateOpts {
   lyrics: string;
   duration: number;
   audioUrl: string | null;
-  referenceImageUrl: string | null;
+  referenceImageUrls: string[];
   storyDescription?: string;
   characterInstructions?: string;
   cameraInstructions?: string;
@@ -384,7 +397,7 @@ export async function orchestrateLyricVideo(opts: OrchestrateOpts): Promise<void
     await runTranscription(adId, opts.audioUrl);
 
     await setStage(adId, "storyboard", 45);
-    await runStoryboard(adId, opts.songTitle, opts.referenceImageUrl, opts.userId);
+    await runStoryboard(adId, opts.songTitle, opts.referenceImageUrls, opts.userId);
 
     await setStage(adId, "ready_to_render", 90);
     await patchAd(adId, { video_status: "queued" });
@@ -397,33 +410,28 @@ export async function orchestrateLyricVideo(opts: OrchestrateOpts): Promise<void
   }
 }
 
-// ── Re-roll a single scene (used by regenerate-scene-image) ─────────────────
-export async function regenerateScene(opts: {
-  sceneId: string;
-  userId: string;
-}): Promise<{ url: string }> {
+// ── Re-roll a single scene ─────────────────────────────────────────────────
+export async function regenerateScene(opts: { sceneId: string; userId: string }): Promise<{ url: string }> {
   const sb = service();
   const { data: scene, error } = await sb
     .from("video_scenes")
     .select("id, user_id, prompt, ad_id, regen_count")
-    .eq("id", opts.sceneId)
-    .maybeSingle();
+    .eq("id", opts.sceneId).maybeSingle();
   if (error || !scene) throw new Error("Scene not found");
   if (scene.user_id !== opts.userId) throw new Error("Forbidden");
 
   const { data: ad } = await sb.from("generated_ads")
-    .select("ad_copy, product_image_url")
-    .eq("id", scene.ad_id).maybeSingle();
+    .select("ad_copy, product_image_url").eq("id", scene.ad_id).maybeSingle();
   const adCopy = (ad?.ad_copy ?? {}) as Record<string, unknown>;
   const songTitle = String(adCopy.title ?? "Untitled");
-  const referenceImageUrl = (adCopy.referenceImageUrl as string | undefined) ?? ad?.product_image_url ?? null;
+  const referenceImageUrls = resolveAdReferences(adCopy, ad?.product_image_url ?? null);
 
   await sb.from("video_scenes").update({ image_status: "generating", error_message: null }).eq("id", scene.id);
   try {
     const { url } = await generateSceneImage({
       sceneId: scene.id,
       prompt: scene.prompt as SceneSpec["prompt"],
-      referenceImageUrl,
+      referenceImageUrls,
       songTitle,
       userId: opts.userId,
     });
@@ -438,6 +446,50 @@ export async function regenerateScene(opts: {
     }).eq("id", scene.id);
     throw e;
   }
+}
+
+// ── Re-roll ALL scenes for an ad (same script + references) ────────────────
+export async function regenerateAllScenes(opts: { adId: string; userId: string }): Promise<{ count: number }> {
+  const sb = service();
+  const { data: ad } = await sb.from("generated_ads")
+    .select("id, user_id, ad_copy, product_image_url").eq("id", opts.adId).maybeSingle();
+  if (!ad) throw new Error("Ad not found");
+  if (ad.user_id !== opts.userId) throw new Error("Forbidden");
+
+  const adCopy = (ad.ad_copy ?? {}) as Record<string, unknown>;
+  const songTitle = String(adCopy.title ?? "Untitled");
+  const referenceImageUrls = resolveAdReferences(adCopy, ad.product_image_url ?? null);
+
+  // Reset all scenes to pending and bump regen_count.
+  const { data: existing } = await sb.from("video_scenes")
+    .select("id, regen_count").eq("ad_id", opts.adId);
+  const count = existing?.length ?? 0;
+  if (count === 0) throw new Error("No scenes to regenerate");
+
+  await sb.from("video_scenes").update({
+    image_status: "pending", error_message: null, image_url: null,
+  }).eq("ad_id", opts.adId);
+
+  await patchAd(opts.adId, { video_progress: 45 }, { pipelineStage: "storyboard" });
+
+  // Run in background so the request returns immediately.
+  // @ts-ignore Deno
+  EdgeRuntime.waitUntil((async () => {
+    try {
+      await runStoryboard(opts.adId, songTitle, referenceImageUrls, opts.userId);
+      // bump regen counters
+      for (const s of existing ?? []) {
+        await sb.from("video_scenes").update({
+          regen_count: (s.regen_count ?? 0) + 1,
+        }).eq("id", s.id);
+      }
+      await patchAd(opts.adId, { video_progress: 90 }, { pipelineStage: "ready_to_render" });
+    } catch (e) {
+      console.error("[regenerateAllScenes] failed:", (e as Error).message);
+    }
+  })());
+
+  return { count };
 }
 
 // ── Kie.ai render submit + poll helpers (used by render & poll functions) ───
