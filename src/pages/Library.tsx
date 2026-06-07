@@ -331,37 +331,89 @@ const Library = () => {
   useEffect(() => {
     if (!mediaViewer.isOpen || !mediaViewer.ad?.id) return;
     const adId = mediaViewer.ad.id;
-    const channel = supabase
-      .channel(`reslice-${adId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "generated_ads", filter: `id=eq.${adId}` },
-        () => { fetchAds(); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+    let attempt = 0;
+
+    const subscribe = () => {
+      if (cancelled) return;
+      // Tear down any previous instance before creating a new one.
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* ignore */ }
+        channel = null;
+      }
+      channel = supabase
+        .channel(`reslice-${adId}-${Date.now()}`)
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "generated_ads", filter: `id=eq.${adId}` },
+          () => { fetchAds(); },
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            attempt = 0;
+            // Snap state on (re)connect so we don't miss events fired while offline.
+            fetchAds();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            if (cancelled) return;
+            attempt += 1;
+            const delay = Math.min(15_000, 500 * 2 ** Math.min(attempt, 5));
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(subscribe, delay);
+          }
+        });
+    };
+
+    subscribe();
+
+    // Resume on tab focus / network back online (channel may have gone stale).
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchAds();
+        subscribe();
+      }
+    };
+    const onOnline = () => { fetchAds(); subscribe(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+      if (channel) { try { supabase.removeChannel(channel); } catch { /* ignore */ } }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaViewer.isOpen, mediaViewer.ad?.id]);
 
-  // Per-job transition toast — fires once when phase moves active → done/failed.
+  // Per-job transition toast — fires at most once per terminal (done/failed)
+  // state, even if duplicate or out-of-order realtime events arrive.
   useEffect(() => {
     if (!mediaViewer.isOpen || !mediaViewer.ad) return;
     const adId = mediaViewer.ad.id;
     const phase = mediaViewer.ad.ad_copy?.sliceStatus?.phase ?? null;
     const prev = lastSlicePhaseByAdRef.current.get(adId) ?? null;
-    if (prev === phase) return; // no transition → no toast (dedup)
+    lastSlicePhaseByAdRef.current.set(adId, phase);
+    if (phase !== "done" && phase !== "failed") return;
 
-    const wasActive = prev === "queued" || prev === "uploading" || prev === "slicing" || prev === "validating";
-    if (wasActive && phase === "done") {
+    const terminalKey = `${adId}:${phase}`;
+    if (firedTerminalToastsRef.current.has(terminalKey)) return; // already toasted
+    // Only fire when we actually transition into this terminal state during
+    // this session (skip if the viewer opened with the state already set).
+    if (prev === phase) return;
+    firedTerminalToastsRef.current.add(terminalKey);
+
+    if (phase === "done") {
       const count = mediaViewer.ad.ad_copy?.sliceStatus?.sliceCount ?? 0;
       sonner.success("Audio re-slice complete", {
         description: `${count} scene slice${count === 1 ? "" : "s"} ready.`,
       });
-    } else if (wasActive && phase === "failed") {
+    } else {
       const err = mediaViewer.ad.ad_copy?.sliceStatus?.error ?? "Unknown error";
       sonner.error("Audio re-slice failed", { description: err });
     }
-    lastSlicePhaseByAdRef.current.set(adId, phase);
   }, [mediaViewer.isOpen, mediaViewer.ad?.id, mediaViewer.ad?.ad_copy?.sliceStatus?.phase]);
 
 
@@ -369,6 +421,9 @@ const Library = () => {
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
   // Last-seen slice phase per ad-id — prevents duplicate transition toasts.
   const lastSlicePhaseByAdRef = useRef<Map<string, string | null>>(new Map());
+  // Terminal toast guard — keys like `${adId}:done` / `${adId}:failed`.
+  const firedTerminalToastsRef = useRef<Set<string>>(new Set());
+
 
 
   useEffect(() => {
@@ -803,6 +858,10 @@ const Library = () => {
 
   const handleReslice = async (ad: GeneratedAd) => {
     setReslicingIds(prev => new Set(prev).add(ad.id));
+    // Allow toasts to fire again for this ad's next terminal state.
+    firedTerminalToastsRef.current.delete(`${ad.id}:done`);
+    firedTerminalToastsRef.current.delete(`${ad.id}:failed`);
+
     try {
       const res = await supabase.functions.invoke("slice-suno-audio", {
         body: { adId: ad.id, force: true },
@@ -1723,8 +1782,13 @@ const Library = () => {
                         ) : (
                           <RefreshCw className="h-4 w-4 mr-2" />
                         )}
-                        Re-slice audio
+                        {isActivePhase
+                          ? (phaseLabel[status!.phase] ?? "Re-slicing…")
+                          : reslicing
+                            ? "Re-slicing…"
+                            : "Re-slice audio"}
                       </Button>
+
                     </div>
 
                     {/* Real-time status indicator for Re-slice */}
