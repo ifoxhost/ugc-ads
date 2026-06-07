@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireSecrets, jsonError } from "../_shared/startup-checks.ts";
-import { orchestrateLyricVideo, getKieModel } from "../_shared/pipeline.ts";
+import { orchestrateLyricVideo, getKieModel, persistReferenceImages } from "../_shared/pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
