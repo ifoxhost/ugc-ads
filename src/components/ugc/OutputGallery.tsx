@@ -133,24 +133,43 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
     return ad.status === "video_failed" || ad.video_status === "failed";
   };
 
-  // Get processing status message with progress
-  const getVideoStatusMessage = (ad: GeneratedAd): { message: string; progress: number } => {
+  // Get processing status message with progress + ETA
+  const getVideoStatusMessage = (ad: GeneratedAd): { message: string; progress: number; eta?: string } => {
     const progress = ad.video_progress || 0;
-    
-    if (ad.video_status === "queued") {
-      return { message: "Queued...", progress: 0 };
+    // Estimate remaining time assuming a typical 4-minute render budget.
+    const estimateEta = (pct: number): string | undefined => {
+      if (pct <= 0 || pct >= 100) return undefined;
+      const totalSec = 240; // ~4 min baseline
+      const remaining = Math.max(5, Math.round(totalSec * (1 - pct / 100)));
+      if (remaining < 60) return `~${remaining}s left`;
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      return s === 0 ? `~${m}m left` : `~${m}m ${s}s left`;
+    };
+
+    if (ad.status === "processing") {
+      return { message: "Preparing scenes…", progress: Math.max(progress, 3) };
     }
-    if (ad.video_status === "processing") {
+    if (ad.video_status === "queued") {
+      return { message: "Queued — waiting for a render slot…", progress: 2 };
+    }
+    if (ad.video_status === "processing" || ad.video_status === "rendering") {
       if (progress > 0) {
-        return { message: `Rendering... ${progress}%`, progress };
+        return { message: `Rendering video… ${progress}%`, progress, eta: estimateEta(progress) };
       }
-      return { message: "Rendering video...", progress: 5 };
+      return { message: "Rendering video…", progress: 5 };
+    }
+    if (ad.video_status === "fetching") {
+      return { message: "Fetching assets…", progress: Math.max(progress, 10) };
+    }
+    if (ad.video_status === "saving") {
+      return { message: "Saving final cut…", progress: Math.max(progress, 90) };
     }
     if (ad.video_status === "retrying") {
       const retryCount = ad.video_retry_count || 0;
-      return { message: `Retrying (${retryCount}/3)...`, progress: 0 };
+      return { message: `Retrying (${retryCount}/3)…`, progress: Math.max(progress, 2) };
     }
-    return { message: "Creating video...", progress: 0 };
+    return { message: "Creating video…", progress: Math.max(progress, 1) };
   };
 
   if (isLoading) {
