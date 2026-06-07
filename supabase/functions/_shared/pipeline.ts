@@ -358,6 +358,7 @@ async function runStoryboard(adId: string, songTitle: string, referenceImageUrls
         await sb.from("video_scenes").update({
           image_status: "failed",
           error_message: (e as Error).message.slice(0, 500),
+          failed_step: "nano-banana",
         }).eq("id", s.id);
       } finally {
         done++;
