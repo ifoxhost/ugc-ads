@@ -49,6 +49,8 @@ project_id = "eqiwbtxomiskpekgrsph"
     verify_jwt = true
   [functions.retry-failed-scenes]
     verify_jwt = true
+  [functions.stitch-lyric-video]
+    verify_jwt = false
   [functions.submit-lyric-video]
     verify_jwt = true
   [functions.submit-ugc-image-ad]
