@@ -226,6 +226,11 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
     }
   };
 
+  const saveAndRegenScene = async (scene: Scene) => {
+    await saveScene(scene);
+    await regenScene(scene);
+  };
+
   const renderClips = async () => {
     if (!allReady) {
       toast({
