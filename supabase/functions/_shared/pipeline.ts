@@ -28,7 +28,16 @@ interface SceneSpec {
   };
 }
 
-const MAX_SCENES = 8;
+const MAX_SCENES = 12;
+const MIN_SCENES = 4;
+// Kling clamps clip length to 5s or 10s. Target ~8s per scene so a 4-min song
+// produces ~30 clips — but we cap at MAX_SCENES and let stitching loop/extend
+// the last clip to fill any remaining audio.
+const TARGET_SECONDS_PER_SCENE = 8;
+export function planSceneCount(durationSec: number): number {
+  const n = Math.ceil((durationSec || 60) / TARGET_SECONDS_PER_SCENE);
+  return Math.max(MIN_SCENES, Math.min(MAX_SCENES, n));
+}
 const NANO_BANANA_CONCURRENCY = 3;
 const OPENAI_API = "https://api.openai.com/v1";
 const LOVABLE_AI_API = "https://ai.gateway.lovable.dev/v1";
@@ -67,8 +76,10 @@ async function runScript(adId: string, opts: {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) throw new Error("OPENAI_API_KEY missing");
 
-  const system = `You are a music-video director. Given lyrics and direction, return a JSON shot list of 4-${MAX_SCENES} scenes, each with start_sec, end_sec, lyric_lines (array), and prompt {story, camera, environment, colorGrading, vfx}. Total duration ~${opts.duration}s. Respond ONLY with JSON: {"scenes":[...]}.`;
+  const targetScenes = planSceneCount(opts.duration);
+  const system = `You are a music-video director. Given lyrics and direction, return a JSON shot list of EXACTLY ${targetScenes} scenes that together span the FULL ${opts.duration}s of the song. Each scene must have start_sec, end_sec, lyric_lines (array), and prompt {story, camera, environment, colorGrading, vfx}. Distribute timings evenly across the song. Respond ONLY with JSON: {"scenes":[...]}.`;
   const user = `Song: "${opts.songTitle}" by ${opts.artist || "Unknown"}
+Total duration: ${opts.duration}s
 Lyrics:
 ${opts.lyrics}
 
@@ -97,11 +108,15 @@ Direction:
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(content);
-  const scenes: SceneSpec[] = (parsed.scenes ?? []).slice(0, MAX_SCENES).map((s: any, i: number) => ({
+  const raw = (parsed.scenes ?? []).slice(0, targetScenes);
+  // Enforce evenly spaced timings spanning the full song duration so the
+  // final stitched video always matches the imported audio length.
+  const segLen = (opts.duration || 60) / Math.max(1, raw.length);
+  const scenes: SceneSpec[] = raw.map((s: any, i: number) => ({
     index: i,
     lyric_lines: Array.isArray(s.lyric_lines) ? s.lyric_lines : [],
-    start_sec: Number(s.start_sec ?? 0),
-    end_sec: Number(s.end_sec ?? 0),
+    start_sec: Math.round(i * segLen * 100) / 100,
+    end_sec: Math.round((i + 1) * segLen * 100) / 100,
     prompt: {
       story: String(s.prompt?.story ?? ""),
       camera: String(s.prompt?.camera ?? ""),
@@ -571,63 +586,59 @@ function kieAspect(r: unknown): "16:9" | "9:16" | "1:1" {
 }
 
 // Kling clamps duration to 5 or 10 seconds (string). Pick the closest.
-function klingDuration(sec: unknown): "5" | "10" {
+export function klingDuration(sec: unknown): "5" | "10" {
   const n = Number(sec ?? 5);
   return n >= 8 ? "10" : "5";
 }
 
-export async function submitKieRender(adId: string, payload: Record<string, unknown>): Promise<string> {
+export interface KieClipSpec {
+  sceneId: string;
+  index: number;
+  imageUrl: string;
+  prompt: string;
+  durationSec: number; // 5 or 10
+  aspectRatio: string;
+}
+
+/**
+ * Submit ONE Kie.ai Kling/Veo clip per scene with `sound: false`. The audio
+ * track from the imported song is muxed back in by `stitch-lyric-video` after
+ * every clip finishes. Returns the Kie task id for polling.
+ */
+export async function submitKieClip(args: {
+  kind: "market" | "veo";
+  endpoint: string;
+  modelId: string;
+  clip: KieClipSpec;
+}): Promise<string> {
   const key = Deno.env.get("KIE_AI_API_KEY");
   if (!key) throw new Error("KIE_AI_API_KEY missing");
-
-  const endpoint = String(payload.endpoint);
-  const kind = String(payload.kind ?? "market");
-  const modelId = String(payload.modelId ?? "");
-  const params = (payload.params ?? {}) as Record<string, unknown>;
-
-  const storyboard = (params.storyboard ?? []) as Array<{ imageUrl?: string }>;
-  const firstImage = storyboard.find((s) => s?.imageUrl)?.imageUrl
-    ?? params.referenceImageUrl as string | undefined;
-  const prompt = String(params.prompt ?? "Lyric video");
-  const aspect = kieAspect(params.aspectRatio);
-  const duration = klingDuration(params.duration);
+  const aspect = kieAspect(args.clip.aspectRatio);
+  const duration = klingDuration(args.clip.durationSec);
 
   let body: Record<string, unknown>;
-  if (kind === "veo") {
+  if (args.kind === "veo") {
     body = {
-      prompt,
-      imageUrls: firstImage ? [firstImage] : undefined,
+      prompt: args.clip.prompt,
+      imageUrls: [args.clip.imageUrl],
       model: "veo3_fast",
       aspectRatio: aspect,
       enableFallback: true,
     };
   } else {
-    // Kling 2.6 — image-to-video when we have a reference image, else text-to-video.
-    const baseModel = (modelId || "kling-2.6").replace(/\/(image|text)-to-video$/, "");
-    if (firstImage) {
-      body = {
-        model: `${baseModel}/image-to-video`,
-        input: {
-          prompt,
-          image_urls: [firstImage],
-          sound: true,
-          duration,
-        },
-      };
-    } else {
-      body = {
-        model: `${baseModel}/text-to-video`,
-        input: {
-          prompt,
-          sound: true,
-          aspect_ratio: aspect,
-          duration,
-        },
-      };
-    }
+    const baseModel = (args.modelId || "kling-2.6").replace(/\/(image|text)-to-video$/, "");
+    body = {
+      model: `${baseModel}/image-to-video`,
+      input: {
+        prompt: args.clip.prompt,
+        image_urls: [args.clip.imageUrl],
+        sound: false, // imported song is muxed in by stitch-lyric-video
+        duration,
+      },
+    };
   }
 
-  const res = await fetch(endpoint, {
+  const res = await fetch(args.endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify(body),
@@ -637,9 +648,9 @@ export async function submitKieRender(adId: string, payload: Record<string, unkn
   const d = data?.data ?? data;
   const taskId = d?.taskId ?? d?.task_id ?? d?.id ?? data?.taskId;
   if (!taskId) throw new Error(`Kie.ai returned no taskId: ${JSON.stringify(data).slice(0, 300)}`);
-  await patchAd(adId, { video_task_id: String(taskId), video_status: "processing" });
   return String(taskId);
 }
+
 
 export async function pollKieTask(taskId: string): Promise<{ status: string; videoUrl?: string }> {
   const key = Deno.env.get("KIE_AI_API_KEY");

@@ -1,18 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireSecrets, jsonError } from "../_shared/startup-checks.ts";
-import { getKieModel, submitKieRender } from "../_shared/pipeline.ts";
+import { getKieModel, submitKieClip, klingDuration } from "../_shared/pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-const RATIO: Record<string, { width: number; height: number }> = {
-  "9:16": { width: 1080, height: 1920 },
-  "1:1":  { width: 1080, height: 1080 },
-  "16:9": { width: 1920, height: 1080 },
-  "4:5":  { width: 1080, height: 1350 },
 };
 
 serve(async (req) => {
@@ -53,36 +46,78 @@ serve(async (req) => {
     const adCopy = (ad.ad_copy ?? {}) as Record<string, unknown>;
     const modelKey = String(adCopy.aiModel ?? "kling-3.0").startsWith("veo") ? "veo" : "kling";
     const kieModel = getKieModel(modelKey)!;
-    const dims = RATIO[ad.aspect_ratio ?? "9:16"] ?? RATIO["9:16"];
+    const aspect = ad.aspect_ratio ?? "9:16";
+    const songTitle = String(adCopy.title ?? "Lyric video");
+    const audioUrl = (adCopy.audioFileUrl ?? null) as string | null;
+    const totalDuration = Number(adCopy.duration ?? 60);
 
-    const storyboard = scenes.map((s) => ({
-      index: s.index, startSec: s.start_sec, endSec: s.end_sec, imageUrl: s.image_url,
-    }));
+    // Submit one Kie clip per scene. Each clip is silent — the user's imported
+    // song is muxed in by stitch-lyric-video after all clips finish.
+    const kieTasks: Array<{ sceneId: string; index: number; taskId: string; durationSec: number }> = [];
+    const failures: Array<{ sceneId: string; error: string }> = [];
 
-    const taskId = await submitKieRender(adId, {
-      endpoint: kieModel.endpoint,
-      kind: kieModel.kind,
-      modelId: kieModel.id,
-      params: {
-        prompt: String(adCopy.title ?? "Lyric video"),
-        audioUrl: adCopy.audioFileUrl ?? null,
-        referenceImageUrl: adCopy.referenceImageUrl ?? null,
-        pexelsBackgroundUrl: adCopy.pexelsBackgroundUrl ?? null,
-        storyboard,
-        aspectRatio: ad.aspect_ratio,
-        width: dims.width, height: dims.height,
-        fps: 30,
-        duration: Number(adCopy.duration ?? 60),
-        resolution: adCopy.resolution ?? "1080p",
-      },
-    });
+    for (const s of scenes) {
+      const sceneDur = Math.max(1, Number(s.end_sec) - Number(s.start_sec));
+      const clipDur = Number(klingDuration(sceneDur)); // 5 or 10
+      const promptText = [
+        `"${songTitle}" — scene ${s.index + 1}/${scenes.length}.`,
+        (s.prompt as any)?.story,
+        (s.prompt as any)?.camera,
+        (s.prompt as any)?.vfx,
+      ].filter(Boolean).join(" ");
+      try {
+        const taskId = await submitKieClip({
+          kind: kieModel.kind,
+          endpoint: kieModel.endpoint,
+          modelId: kieModel.id,
+          clip: {
+            sceneId: s.id,
+            index: s.index,
+            imageUrl: s.image_url!,
+            prompt: promptText,
+            durationSec: clipDur,
+            aspectRatio: aspect,
+          },
+        });
+        kieTasks.push({ sceneId: s.id, index: s.index, taskId, durationSec: clipDur });
+      } catch (e) {
+        failures.push({ sceneId: s.id, error: (e as Error).message });
+      }
+    }
+
+    if (kieTasks.length === 0) {
+      return new Response(JSON.stringify({ error: "All Kie submissions failed", failures }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const renderPlan = {
+      audioUrl,
+      totalDurationSec: totalDuration,
+      aspectRatio: aspect,
+      scenes: kieTasks.map((k) => ({ sceneId: k.sceneId, index: k.index, durationSec: k.durationSec })),
+    };
 
     await sb.from("generated_ads").update({
-      ad_copy: { ...adCopy, pipelineStage: "rendering" },
+      // Keep video_task_id pointing at the first clip for backwards compat;
+      // the source-of-truth is ad_copy.kieTasks.
+      video_task_id: kieTasks[0].taskId,
+      video_status: "processing",
+      video_progress: 60,
+      ad_copy: {
+        ...adCopy,
+        pipelineStage: "rendering",
+        kieTasks,
+        kieSubmitFailures: failures,
+        renderPlan,
+      },
     }).eq("id", adId);
 
-    return new Response(JSON.stringify({ success: true, taskId }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({
+      success: true,
+      submitted: kieTasks.length,
+      failed: failures.length,
+      taskIds: kieTasks.map((k) => k.taskId),
+    }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("[render-lyric-video] error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }),
