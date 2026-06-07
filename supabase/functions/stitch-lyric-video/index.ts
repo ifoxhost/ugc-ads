@@ -30,10 +30,21 @@ const SHOTSTACK_PROD = "https://api.shotstack.io/edit/v1";
 const SHOTSTACK_STAGE = "https://api.shotstack.io/edit/stage";
 
 // Duration drift we'll accept before rejecting a stitched output (seconds).
-const DURATION_TOLERANCE_SEC = 1.5;
+// Tunable via env `STITCH_DURATION_TOLERANCE_SEC` (default 1.5).
+const DURATION_TOLERANCE_SEC = (() => {
+  const raw = Deno.env.get("STITCH_DURATION_TOLERANCE_SEC");
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 1.5;
+})();
 // How many times we retry fal.ai compose end-to-end (submit + validate)
 // before giving up and handing off to Shotstack.
-const FAL_MAX_ATTEMPTS = 2;
+// Tunable via env `STITCH_FAL_MAX_ATTEMPTS` (default 2, min 1, max 5).
+const FAL_MAX_ATTEMPTS = (() => {
+  const raw = Deno.env.get("STITCH_FAL_MAX_ATTEMPTS");
+  const n = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(n)) return 2;
+  return Math.min(5, Math.max(1, n));
+})();
 
 // Validate FAL_KEY shape at module-load: fal keys are `<uuid>:<hex>` and
 // MUST never appear in logs. Returns the key only when usable.
