@@ -449,6 +449,13 @@ async function finalize(
   adCopy: Record<string, any>,
   via: string,
   drift: { measured: number | null; delta: number | null } | null,
+  meta?: {
+    attempts?: number;
+    tolerance?: number;
+    requested?: number;
+    falAttempts?: number;
+    falLastDriftSec?: number | null;
+  },
 ) {
   await sb.from("generated_ads").update({
     status: "completed",
@@ -460,10 +467,19 @@ async function finalize(
       ...adCopy,
       pipelineStage: "done",
       stitchedBy: via,
-      stitchValidation: drift ? {
-        measuredDurationSec: drift.measured,
-        driftSec: drift.delta,
-      } : null,
+      stitchValidation: {
+        stitcher: via,
+        requestedDurationSec: meta?.requested ?? null,
+        measuredDurationSec: drift?.measured ?? null,
+        driftSec: drift?.delta ?? null,
+        toleranceSec: meta?.tolerance ?? null,
+        withinTolerance: drift ? (drift.delta != null && meta?.tolerance != null
+          ? drift.delta <= meta.tolerance : null) : null,
+        attempts: meta?.attempts ?? null,
+        falAttempts: meta?.falAttempts ?? null,
+        falLastDriftSec: meta?.falLastDriftSec ?? null,
+        validatedAt: new Date().toISOString(),
+      },
     },
   }).eq("id", adId);
   try {
