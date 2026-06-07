@@ -35,7 +35,7 @@ export interface LyricVideoFormData {
   referenceImageUrl: string | null;
   referenceImageName: string | null;
   aiModel: "kling" | "veo";
-  aiImageModel: "imagen-3" | "midjourney-v6" | "flux-pro";
+  aiImageModel: "nano-banana";
   resolution: "720p" | "1080p" | "1440p" | "4k";
   quality: "standard" | "high" | "ultra";
   fps: 24 | 30 | 60;
