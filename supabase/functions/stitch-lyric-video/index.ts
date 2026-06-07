@@ -98,11 +98,17 @@ serve(async (req) => {
 
 
   try {
-    const { adId } = await req.json();
+    const body = await req.json().catch(() => ({} as any));
+    const { adId, overrides } = body ?? {};
     if (!adId) return json({ error: "adId required" }, 400);
 
+    // Per-job overrides — clamp to safe ranges; fall back to env defaults.
+    const maxAttempts = clampInt(overrides?.falMaxAttempts, FAL_MAX_ATTEMPTS, 1, 5);
+    const tolerance = clampNum(overrides?.toleranceSec, DURATION_TOLERANCE_SEC, 0.1, 30);
+    const overrideApplied = maxAttempts !== FAL_MAX_ATTEMPTS || tolerance !== DURATION_TOLERANCE_SEC;
+
     const { data: ad } = await sb.from("generated_ads")
-      .select("id, user_id, aspect_ratio, ad_copy")
+      .select("id, user_id, aspect_ratio, ad_copy, email")
       .eq("id", adId).maybeSingle();
     if (!ad) return json({ error: "Ad not found" }, 404);
 
@@ -120,7 +126,7 @@ serve(async (req) => {
     const clipPlan = buildClipPlan(ready, totalDuration);
     const planTotal = clipPlan.reduce((s, c) => s + c.duration, 0);
 
-    console.log(`[stitch] ad=${adId} clips=${clipPlan.length} planTotal=${planTotal}s audio=${totalDuration}s primary=${falKey ? "fal" : shotstackKey ? "shotstack" : "none"}`);
+    console.log(`[stitch] ad=${adId} clips=${clipPlan.length} planTotal=${planTotal}s audio=${totalDuration}s primary=${falKey ? "fal" : shotstackKey ? "shotstack" : "none"} maxAttempts=${maxAttempts} tolerance=${tolerance}s${overrideApplied ? " (override)" : ""}`);
 
     await sb.from("generated_ads").update({
       video_progress: 90,
@@ -132,18 +138,20 @@ serve(async (req) => {
     // Audit trail entries — one per stitcher attempt.
     const audit: AuditEntry[] = [];
     const startedAt = new Date().toISOString();
+    const userEmail = (ad as any).email as string | undefined;
+
 
     // === PRIMARY: fal.ai compose (with bounded retries) ===
     let lastFalDrift: { measured: number | null; delta: number | null } | null = null;
     let falAttempts = 0;
     if (falKey) {
-      for (let attempt = 1; attempt <= FAL_MAX_ATTEMPTS; attempt++) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         falAttempts = attempt;
         const entry: AuditEntry = {
           stitcher: "fal.ai/compose",
           attempt,
           startedAt: new Date().toISOString(),
-          tolerance: DURATION_TOLERANCE_SEC,
+          tolerance: tolerance,
           requestedDurationSec: totalDuration,
           redactionApplied: true,
         };
@@ -155,10 +163,10 @@ serve(async (req) => {
             entry.outcome = "no_url";
             entry.endedAt = new Date().toISOString();
             audit.push(entry);
-            console.warn(`[stitch] fal attempt=${attempt}/${FAL_MAX_ATTEMPTS} returned no url ad=${adId}`);
+            console.warn(`[stitch] fal attempt=${attempt}/${maxAttempts} returned no url ad=${adId}`);
             continue;
           }
-          const drift = await validateDuration(falUrl, totalDuration);
+          const drift = await validateDuration(falUrl, totalDuration, tolerance);
           lastFalDrift = drift;
           entry.measuredDurationSec = drift.measured;
           entry.driftSec = drift.delta;
@@ -169,13 +177,13 @@ serve(async (req) => {
             audit.push(entry);
             console.log(`[stitch] fal OK ad=${adId} attempt=${attempt} drift=${drift.delta}s`);
             await finalize(sb, ad.id, ad.user_id, falUrl, adCopy, "fal.ai/compose", drift, {
-              attempts: attempt, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+              attempts: attempt, tolerance: tolerance, requested: totalDuration,
             }, audit, startedAt);
             return json({ success: true, videoUrl: falUrl, via: "fal", attempt, drift });
           }
           entry.outcome = "drift_rejected";
           audit.push(entry);
-          console.warn(`[stitch] fal drift too large ad=${adId} attempt=${attempt} delta=${drift.delta}s tolerance=${DURATION_TOLERANCE_SEC}s — retrying`);
+          console.warn(`[stitch] fal drift too large ad=${adId} attempt=${attempt} delta=${drift.delta}s tolerance=${tolerance}s — retrying`);
         } catch (e) {
           entry.outcome = "error";
           entry.error = redact((e as Error).message, falKey);
@@ -184,14 +192,14 @@ serve(async (req) => {
           console.error(`[stitch] fal error ad=${adId} attempt=${attempt}:`, entry.error);
         }
       }
-      console.warn(`[stitch] fal exhausted ${FAL_MAX_ATTEMPTS} attempts ad=${adId} — falling back to Shotstack`);
+      console.warn(`[stitch] fal exhausted ${maxAttempts} attempts ad=${adId} — falling back to Shotstack`);
     } else {
       audit.push({
         stitcher: "fal.ai/compose",
         attempt: 0,
         outcome: "skipped_no_key",
         requestedDurationSec: totalDuration,
-        tolerance: DURATION_TOLERANCE_SEC,
+        tolerance: tolerance,
         redactionApplied: true,
         startedAt: new Date().toISOString(),
         endedAt: new Date().toISOString(),
@@ -205,7 +213,7 @@ serve(async (req) => {
         stitcher: "shotstack",
         attempt: 1,
         startedAt: new Date().toISOString(),
-        tolerance: DURATION_TOLERANCE_SEC,
+        tolerance: tolerance,
         requestedDurationSec: totalDuration,
         redactionApplied: true,
       };
@@ -215,7 +223,7 @@ serve(async (req) => {
           resolution: adCopy.resolution,
         });
         if (ssUrl) {
-          const drift = await validateDuration(ssUrl, totalDuration);
+          const drift = await validateDuration(ssUrl, totalDuration, tolerance);
           entry.measuredDurationSec = drift.measured;
           entry.driftSec = drift.delta;
           entry.withinTolerance = drift.ok;
@@ -225,7 +233,7 @@ serve(async (req) => {
           console.log(`[stitch] shotstack OK ad=${adId} drift=${drift.delta}s ok=${drift.ok}`);
           await finalize(sb, ad.id, ad.user_id, ssUrl, adCopy,
             drift.ok ? "shotstack" : "shotstack_with_drift", drift, {
-              attempts: 1, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+              attempts: 1, tolerance: tolerance, requested: totalDuration,
               falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
             }, audit, startedAt);
           return json({ success: true, videoUrl: ssUrl, via: "shotstack", drift });
@@ -246,7 +254,7 @@ serve(async (req) => {
         attempt: 0,
         outcome: "skipped_no_key",
         requestedDurationSec: totalDuration,
-        tolerance: DURATION_TOLERANCE_SEC,
+        tolerance: tolerance,
         redactionApplied: true,
         startedAt: new Date().toISOString(),
         endedAt: new Date().toISOString(),
@@ -261,13 +269,13 @@ serve(async (req) => {
       attempt: 1,
       outcome: "accepted",
       requestedDurationSec: totalDuration,
-      tolerance: DURATION_TOLERANCE_SEC,
+      tolerance: tolerance,
       redactionApplied: true,
       startedAt: new Date().toISOString(),
       endedAt: new Date().toISOString(),
     });
     await finalize(sb, ad.id, ad.user_id, firstUrl, adCopy, "first_clip_fallback", null, {
-      attempts: 0, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+      attempts: 0, tolerance: tolerance, requested: totalDuration,
       falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
     }, audit, startedAt);
     return json({ success: true, videoUrl: firstUrl, via: "first_clip" });
@@ -466,6 +474,7 @@ async function stitchWithShotstack(opts: {
 async function validateDuration(
   videoUrl: string,
   expectedSec: number,
+  toleranceSec: number = DURATION_TOLERANCE_SEC,
 ): Promise<{ ok: boolean; measured: number | null; delta: number | null }> {
   try {
     const r = await fetch(videoUrl, { headers: { Range: "bytes=0-262143" } });
@@ -480,7 +489,7 @@ async function validateDuration(
       return { ok: true, measured: null, delta: null };
     }
     const delta = Math.abs(measured - expectedSec);
-    return { ok: delta <= DURATION_TOLERANCE_SEC, measured, delta };
+    return { ok: delta <= toleranceSec, measured, delta };
   } catch (e) {
     console.warn(`[stitch.validate] error:`, (e as Error).message);
     return { ok: true, measured: null, delta: null };
@@ -613,6 +622,112 @@ async function finalize(
   } catch (e) {
     console.warn(`[stitch.finalize] consume_credit error:`, (e as Error).message);
   }
+  // Fire-and-forget notification — never block the stitch return.
+  try {
+    await notifyStitchResult(sb, {
+      adId,
+      userId,
+      via,
+      videoUrl,
+      drift,
+      requested: meta?.requested ?? null,
+      adCopy,
+    });
+  } catch (e) {
+    console.warn(`[stitch.finalize] notify error:`, (e as Error).message);
+  }
+}
+
+function clampInt(v: any, fallback: number, lo: number, hi: number): number {
+  const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(hi, Math.max(lo, Math.trunc(n)));
+}
+function clampNum(v: any, fallback: number, lo: number, hi: number): number {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+/**
+ * Categorize the stitch outcome and notify the user via:
+ *   - in-app: writes nothing of its own; the Library UI shows the result
+ *     through `stitchValidation` + a re-fetch.
+ *   - push:    invokes `send-push-notification` if the project has it.
+ *   - email:   sends via Resend (re-using the project's `RESEND_API_KEY`).
+ * All branches respect `notification_preferences.video_status_emails`.
+ */
+async function notifyStitchResult(sb: any, args: {
+  adId: string;
+  userId: string;
+  via: string;
+  videoUrl: string;
+  drift: { measured: number | null; delta: number | null } | null;
+  requested: number | null;
+  adCopy: Record<string, any>;
+}) {
+  const { adId, userId, via, videoUrl, drift, requested, adCopy } = args;
+  const kind: "success" | "fallback" | "failed" =
+    via === "fal.ai/compose" ? "success"
+    : via.startsWith("shotstack") ? "fallback"
+    : "failed";
+
+  // Push (best-effort; ignore if function not deployed).
+  try {
+    await sb.functions.invoke("send-push-notification", {
+      body: {
+        userId,
+        title: kind === "success" ? "Re-stitch complete"
+          : kind === "fallback" ? "Re-stitch fell back to Shotstack"
+          : "Re-stitch failed",
+        body: `“${adCopy.title ?? "Your video"}” — drift ${drift?.delta?.toFixed(2) ?? "—"}s (req ${requested ?? "—"}s)`,
+        url: `/library?ad=${adId}`,
+        tag: `stitch-${adId}`,
+      },
+    });
+  } catch (_) { /* push optional */ }
+
+  // Email opt-in check.
+  const { data: prefs } = await sb.from("notification_preferences")
+    .select("video_status_emails").eq("user_id", userId).maybeSingle();
+  if (prefs && prefs.video_status_emails === false) return;
+
+  const { data: profile } = await sb.from("profiles")
+    .select("email").eq("id", userId).maybeSingle();
+  const to = profile?.email;
+  if (!to) return;
+
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendKey) return;
+
+  const subject = kind === "success"
+    ? `Re-stitch succeeded — ${adCopy.title ?? "your video"}`
+    : kind === "fallback"
+    ? `Re-stitch used Shotstack fallback — ${adCopy.title ?? "your video"}`
+    : `Re-stitch failed — ${adCopy.title ?? "your video"}`;
+  const accent = kind === "success" ? "#16a34a" : kind === "fallback" ? "#d97706" : "#dc2626";
+  const html = `
+    <div style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;padding:24px">
+      <h2 style="color:${accent};margin:0 0 12px">${subject}</h2>
+      <p>Stitcher: <strong>${via}</strong></p>
+      <p>Requested duration: ${requested ?? "—"}s &middot; Measured: ${drift?.measured?.toFixed(2) ?? "—"}s &middot; Drift: ${drift?.delta?.toFixed(2) ?? "—"}s</p>
+      <p><a href="https://lyricavid.com/library?ad=${adId}" style="display:inline-block;padding:10px 16px;background:${accent};color:#fff;border-radius:6px;text-decoration:none">Open in Library</a></p>
+      <p style="color:#666;font-size:12px;margin-top:24px">You're receiving this because video status emails are enabled in your notification preferences.</p>
+    </div>`;
+
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${resendKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Lyric A Vid <notify@notify.lyricavid.com>",
+      to: [to],
+      subject,
+      html,
+    }),
+  }).catch((e) => console.warn(`[stitch.notify] email failed:`, e?.message));
 }
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }

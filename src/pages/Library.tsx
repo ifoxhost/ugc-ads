@@ -735,17 +735,35 @@ const Library = () => {
     }
   };
 
-  const handleRestitch = async (ad: GeneratedAd) => {
+  const handleRestitch = async (
+    ad: GeneratedAd,
+    overrides?: { falMaxAttempts?: number; toleranceSec?: number },
+  ) => {
     setRestitchingIds(prev => new Set(prev).add(ad.id));
     try {
       const res = await supabase.functions.invoke("stitch-lyric-video", {
-        body: { adId: ad.id },
+        body: { adId: ad.id, overrides },
       });
       if (res.error) throw res.error;
-      toast({
-        title: "Re-stitch started",
-        description: "fal.ai retries will run, falling back to Shotstack if needed.",
-      });
+      const via = (res.data as any)?.via ?? "unknown";
+      const drift = (res.data as any)?.drift?.delta;
+      if (via === "fal") {
+        toast({
+          title: "Re-stitch succeeded",
+          description: `fal.ai compose accepted${drift != null ? ` (drift ${Number(drift).toFixed(2)}s)` : ""}.`,
+        });
+      } else if (via === "shotstack") {
+        toast({
+          title: "Fell back to Shotstack",
+          description: `fal.ai exhausted retries${drift != null ? `; Shotstack drift ${Number(drift).toFixed(2)}s` : ""}.`,
+        });
+      } else {
+        toast({
+          title: "Re-stitch could not produce a clean cut",
+          description: "Published the first clip as a safety net. Check the audit trail.",
+          variant: "destructive",
+        });
+      }
       fetchAds();
     } catch (err: any) {
       console.error("Re-stitch error:", err);
@@ -1419,9 +1437,9 @@ const Library = () => {
                   );
                 })()}
 
-                {/* Audit trail */}
+                {/* Audit trail with per-attempt diff highlighting */}
                 {mediaViewer.ad!.ad_copy!.stitchAudit?.entries?.length ? (
-                  <details className="mt-3 text-sm">
+                  <details className="mt-3 text-sm" open>
                     <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                       Decision audit trail ({mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.length} attempt{mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.length === 1 ? "" : "s"})
                       {mediaViewer.ad!.ad_copy!.stitchAudit!.redactionApplied === false && (
@@ -1429,7 +1447,8 @@ const Library = () => {
                       )}
                     </summary>
                     <ol className="mt-2 space-y-1 pl-4 list-decimal">
-                      {mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.map((e, i) => {
+                      {mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.map((e, i, arr) => {
+                        const prev = i > 0 ? arr[i - 1] : null;
                         const fmt = (n: number | null | undefined) =>
                           n == null ? "—" : `${Number(n).toFixed(2)}s`;
                         const tone =
@@ -1437,11 +1456,31 @@ const Library = () => {
                           e.outcome === "accepted_with_drift" ? "text-amber-500" :
                           e.outcome === "drift_rejected" || e.outcome === "error" ? "text-destructive" :
                           "text-muted-foreground";
+                        const diff = (cur: number | null | undefined, old: number | null | undefined) => {
+                          if (cur == null || old == null) return null;
+                          const d = cur - old;
+                          if (Math.abs(d) < 0.005) return <span className="text-muted-foreground"> =</span>;
+                          const arrow = d > 0 ? "▲" : "▼";
+                          const col = d > 0 ? "text-amber-500" : "text-primary";
+                          return <span className={`${col} ml-1`}>{arrow}{Math.abs(d).toFixed(2)}s</span>;
+                        };
+                        const stitcherChanged = prev && prev.stitcher !== e.stitcher;
                         return (
                           <li key={i} className={`font-mono text-xs ${tone}`}>
-                            [{e.stitcher} #{e.attempt}] {e.outcome ?? "—"}
-                            {e.driftSec != null && ` • drift ${fmt(e.driftSec)}`}
-                            {e.measuredDurationSec != null && ` • measured ${fmt(e.measuredDurationSec)}`}
+                            <span className={stitcherChanged ? "underline decoration-amber-500" : ""}>
+                              [{e.stitcher} #{e.attempt}]
+                            </span>{" "}
+                            {e.outcome ?? "—"}
+                            {e.driftSec != null && (
+                              <>
+                                {" • drift "}{fmt(e.driftSec)}{diff(e.driftSec, prev?.driftSec)}
+                              </>
+                            )}
+                            {e.measuredDurationSec != null && (
+                              <>
+                                {" • measured "}{fmt(e.measuredDurationSec)}{diff(e.measuredDurationSec, prev?.measuredDurationSec)}
+                              </>
+                            )}
                             {e.error && ` • ${e.error}`}
                           </li>
                         );
@@ -1450,28 +1489,13 @@ const Library = () => {
                   </details>
                 ) : null}
 
-                {/* Re-stitch + audit export */}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleRestitch(mediaViewer.ad!)}
-                    disabled={restitchingIds.has(mediaViewer.ad!.id)}
-                  >
-                    {restitchingIds.has(mediaViewer.ad!.id)
-                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      : <Scissors className="h-4 w-4 mr-2" />}
-                    Re-stitch
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => downloadStitchAudit(mediaViewer.ad!)}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download audit (JSON)
-                  </Button>
-                </div>
+                {/* Re-stitch (with per-job overrides) + audit export */}
+                <RestitchControls
+                  ad={mediaViewer.ad!}
+                  busy={restitchingIds.has(mediaViewer.ad!.id)}
+                  onRestitch={handleRestitch}
+                  onDownloadAudit={downloadStitchAudit}
+                />
               </div>
             )}
 
@@ -2180,6 +2204,72 @@ function CopyableField({ label, value, field, copiedField, onCopy }: CopyableFie
         </Button>
       </div>
       <p className="text-sm">{value}</p>
+    </div>
+  );
+}
+
+interface RestitchControlsProps {
+  ad: GeneratedAd;
+  busy: boolean;
+  onRestitch: (ad: GeneratedAd, overrides?: { falMaxAttempts?: number; toleranceSec?: number }) => void;
+  onDownloadAudit: (ad: GeneratedAd) => void;
+}
+
+function RestitchControls({ ad, busy, onRestitch, onDownloadAudit }: RestitchControlsProps) {
+  const currentTol = ad.ad_copy?.stitchValidation?.toleranceSec ?? 1.5;
+  const [attempts, setAttempts] = useState<number>(2);
+  const [tolerance, setTolerance] = useState<number>(Number(currentTol) || 1.5);
+  const [useOverride, setUseOverride] = useState(false);
+  return (
+    <div className="flex flex-wrap gap-2 pt-2 items-end">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button size="sm" variant="ghost">
+            <Filter className="h-4 w-4 mr-2" />
+            {useOverride ? `Override: ${attempts} × ±${tolerance}s` : "Override defaults"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">Per-job overrides</label>
+            <Checkbox checked={useOverride} onCheckedChange={(v) => setUseOverride(!!v)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">fal.ai max attempts (1–5)</label>
+            <Input
+              type="number" min={1} max={5} value={attempts}
+              disabled={!useOverride}
+              onChange={(e) => setAttempts(Math.min(5, Math.max(1, parseInt(e.target.value || "2", 10))))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Drift tolerance (seconds, 0.1–30)</label>
+            <Input
+              type="number" min={0.1} max={30} step={0.1} value={tolerance}
+              disabled={!useOverride}
+              onChange={(e) => setTolerance(Math.min(30, Math.max(0.1, parseFloat(e.target.value || "1.5"))))}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Leave unchecked to use the project-wide env defaults.
+          </p>
+        </PopoverContent>
+      </Popover>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => onRestitch(ad, useOverride ? { falMaxAttempts: attempts, toleranceSec: tolerance } : undefined)}
+        disabled={busy}
+      >
+        {busy
+          ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          : <Scissors className="h-4 w-4 mr-2" />}
+        Re-stitch
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => onDownloadAudit(ad)}>
+        <Download className="h-4 w-4 mr-2" />
+        Download audit (JSON)
+      </Button>
     </div>
   );
 }
