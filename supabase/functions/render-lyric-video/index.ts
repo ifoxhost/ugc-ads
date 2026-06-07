@@ -174,7 +174,28 @@ serve(async (req) => {
     }
 
 
+    // Detect upstream credit exhaustion — partial renders waste user credits
+    // and produce a video that doesn't match the song, so abort cleanly.
+    const creditFailure = failures.find((f) => /credits?\s*insufficient|insufficient\s*credit|top\s*up/i.test(f.error));
+    if (creditFailure || (kieTasks.length > 0 && failures.length > 0 && kieTasks.length < scenes.length)) {
+      await sb.from("generated_ads").update({
+        status: "video_failed",
+        video_status: "failed",
+        video_progress: 0,
+        ad_copy: { ...adCopy, pipelineStage: "render_failed", kieSubmitFailures: failures, kieTasks: [] },
+      }).eq("id", adId);
+      const msg = creditFailure
+        ? "Video provider (Kie.ai) credits are exhausted. Please top up the KIE_AI account to continue rendering."
+        : `Only ${kieTasks.length} of ${scenes.length} scenes could be submitted. Aborting to avoid a partial render.`;
+      return new Response(JSON.stringify({ error: msg, failures }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (kieTasks.length === 0) {
+      await sb.from("generated_ads").update({
+        status: "video_failed", video_status: "failed", video_progress: 0,
+        ad_copy: { ...adCopy, pipelineStage: "render_failed", kieSubmitFailures: failures },
+      }).eq("id", adId);
       return new Response(JSON.stringify({ error: "All Kie submissions failed", failures }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
