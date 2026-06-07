@@ -46,6 +46,32 @@ interface StitchValidation {
   validatedAt?: string | null;
 }
 
+interface StitchAuditEntry {
+  stitcher: string;
+  attempt: number;
+  startedAt?: string;
+  endedAt?: string;
+  outcome?: string;
+  measuredDurationSec?: number | null;
+  driftSec?: number | null;
+  withinTolerance?: boolean | null;
+  requestedDurationSec?: number | null;
+  tolerance?: number | null;
+  error?: string;
+  redactionApplied?: boolean;
+}
+
+interface StitchAudit {
+  version?: number;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  finalStitcher?: string;
+  tolerance?: number | null;
+  requestedDurationSec?: number | null;
+  entries?: StitchAuditEntry[];
+  redactionApplied?: boolean;
+}
+
 interface AdCopy {
   headline?: string;
   cta?: string;
@@ -61,6 +87,7 @@ interface AdCopy {
   pexelsBackgroundThumbnail?: string;
   stitchedBy?: string;
   stitchValidation?: StitchValidation;
+  stitchAudit?: StitchAudit;
 }
 
 interface GeneratedAd {
