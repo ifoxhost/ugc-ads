@@ -33,6 +33,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { AdminStatsPanel } from "@/components/library/AdminStatsPanel";
 
+interface StitchValidation {
+  stitcher?: string;
+  requestedDurationSec?: number | null;
+  measuredDurationSec?: number | null;
+  driftSec?: number | null;
+  toleranceSec?: number | null;
+  withinTolerance?: boolean | null;
+  attempts?: number | null;
+  falAttempts?: number | null;
+  falLastDriftSec?: number | null;
+  validatedAt?: string | null;
+}
+
 interface AdCopy {
   headline?: string;
   cta?: string;
@@ -46,6 +59,8 @@ interface AdCopy {
   colorPalette?: string;
   pexelsBackgroundUrl?: string;
   pexelsBackgroundThumbnail?: string;
+  stitchedBy?: string;
+  stitchValidation?: StitchValidation;
 }
 
 interface GeneratedAd {
