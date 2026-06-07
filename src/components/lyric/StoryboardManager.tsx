@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Loader2, RefreshCw, Sparkles, Film, Music2,
-  ImageIcon, AlertTriangle, Check, Wand2, Save, Download, Play,
+  ImageIcon, AlertTriangle, Check, Wand2, Save, Download, Play, Pause, Eye,
 } from "lucide-react";
 
 interface Props {
