@@ -9,6 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter } from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import {
   Sparkles,
   Loader2,
@@ -216,7 +218,7 @@ const UGCGenerator = () => {
 
   // Poll for pipeline progress if project is rendering
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setInterval>;
     const isProcessing = activeProject && activeProject.status === "processing";
     
     if (isProcessing) {
@@ -521,7 +523,7 @@ const UGCGenerator = () => {
             }).eq("id", sceneId);
             
             toast({ title: "Video Scene Rendered", description: "Scene clip is ready." });
-          } else if (taskStatus === "failed") {
+          } else if (taskState === "failed") {
             clearInterval(interval);
             throw new Error("Video generation failed on server");
           } else {
