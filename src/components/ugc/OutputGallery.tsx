@@ -122,7 +122,15 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
   };
 
   const isVideoProcessing = (ad: GeneratedAd) => {
-    return ad.status === "video_processing" || ad.video_status === "queued" || ad.video_status === "processing";
+    return (
+      ad.status === "processing" ||
+      ad.status === "video_processing" ||
+      ad.video_status === "queued" ||
+      ad.video_status === "processing" ||
+      ad.video_status === "rendering" ||
+      ad.video_status === "fetching" ||
+      ad.video_status === "saving"
+    );
   };
 
   const isVideoRetrying = (ad: GeneratedAd) => {
