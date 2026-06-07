@@ -954,47 +954,62 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
                   {/* Character Consistency Reference frames */}
                   <div className="space-y-2 border-t border-border/30 pt-3">
                     <Label className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">Consistency reference frames</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      
-                      {/* Start frame slot */}
-                      <div className="space-y-1">
-                        <span className="text-[8px] text-muted-foreground block">Start Reference Frame</span>
-                        <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
-                          <img src={clip.start_reference_image || "https://picsum.photos/id/40/300/300"} className="w-8 h-8 rounded object-cover" />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[9px] truncate block text-muted-foreground">Start Anchor</span>
+                    {(() => {
+                      const bucketRefs: string[] = Array.from(new Set([
+                        ...((ad.ad_copy?.referenceImages as string[] | undefined) ?? []),
+                        ...((ad.ad_copy?.pexelsBackgroundUrls as string[] | undefined) ?? []),
+                        ad.ad_copy?.referenceImageUrl as string | undefined,
+                        ad.ad_copy?.pexelsBackgroundUrl as string | undefined,
+                        clip.start_reference_image,
+                        clip.end_reference_image,
+                      ].filter((u): u is string => typeof u === "string" && u.length > 0)));
+                      const fallback = bucketRefs[0] || "/placeholder.svg";
+                      return (
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Start frame slot */}
+                          <div className="space-y-1">
+                            <span className="text-[8px] text-muted-foreground block">Start Reference Frame</span>
+                            <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
+                              <img src={clip.start_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[9px] truncate block text-muted-foreground">Start Anchor</span>
+                              </div>
+                              <select
+                                value={clip.start_reference_image || ""}
+                                onChange={(e) => updateClip(clip.id, { start_reference_image: e.target.value })}
+                                className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
+                              >
+                                {bucketRefs.length === 0 && <option value="">—</option>}
+                                {bucketRefs.map((u, i) => (
+                                  <option key={`s-${i}`} value={u}>Ref {i + 1}</option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
-                          <select
-                            onChange={(e) => updateClip(clip.id, { start_reference_image: e.target.value })}
-                            className="bg-transparent border-none text-[8px] max-w-[50px] focus:outline-none"
-                          >
-                            <option value="https://picsum.photos/id/40/300/300">Frame 1</option>
-                            <option value="https://picsum.photos/id/42/300/300">Frame 2</option>
-                            <option value="https://picsum.photos/id/45/300/300">Frame 3</option>
-                          </select>
-                        </div>
-                      </div>
 
-                      {/* End frame slot */}
-                      <div className="space-y-1">
-                        <span className="text-[8px] text-muted-foreground block">End Reference Frame</span>
-                        <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
-                          <img src={clip.end_reference_image || "https://picsum.photos/id/41/300/300"} className="w-8 h-8 rounded object-cover" />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[9px] truncate block text-muted-foreground">End Anchor</span>
+                          {/* End frame slot */}
+                          <div className="space-y-1">
+                            <span className="text-[8px] text-muted-foreground block">End Reference Frame</span>
+                            <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
+                              <img src={clip.end_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[9px] truncate block text-muted-foreground">End Anchor</span>
+                              </div>
+                              <select
+                                value={clip.end_reference_image || ""}
+                                onChange={(e) => updateClip(clip.id, { end_reference_image: e.target.value })}
+                                className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
+                              >
+                                {bucketRefs.length === 0 && <option value="">—</option>}
+                                {bucketRefs.map((u, i) => (
+                                  <option key={`e-${i}`} value={u}>Ref {i + 1}</option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
-                          <select
-                            onChange={(e) => updateClip(clip.id, { end_reference_image: e.target.value })}
-                            className="bg-transparent border-none text-[8px] max-w-[50px] focus:outline-none"
-                          >
-                            <option value="https://picsum.photos/id/41/300/300">Frame A</option>
-                            <option value="https://picsum.photos/id/48/300/300">Frame B</option>
-                            <option value="https://picsum.photos/id/49/300/300">Frame C</option>
-                          </select>
                         </div>
-                      </div>
-
-                    </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Versions history dropdown */}
