@@ -622,6 +622,112 @@ async function finalize(
   } catch (e) {
     console.warn(`[stitch.finalize] consume_credit error:`, (e as Error).message);
   }
+  // Fire-and-forget notification — never block the stitch return.
+  try {
+    await notifyStitchResult(sb, {
+      adId,
+      userId,
+      via,
+      videoUrl,
+      drift,
+      requested: meta?.requested ?? null,
+      adCopy,
+    });
+  } catch (e) {
+    console.warn(`[stitch.finalize] notify error:`, (e as Error).message);
+  }
+}
+
+function clampInt(v: any, fallback: number, lo: number, hi: number): number {
+  const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(hi, Math.max(lo, Math.trunc(n)));
+}
+function clampNum(v: any, fallback: number, lo: number, hi: number): number {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+/**
+ * Categorize the stitch outcome and notify the user via:
+ *   - in-app: writes nothing of its own; the Library UI shows the result
+ *     through `stitchValidation` + a re-fetch.
+ *   - push:    invokes `send-push-notification` if the project has it.
+ *   - email:   sends via Resend (re-using the project's `RESEND_API_KEY`).
+ * All branches respect `notification_preferences.video_status_emails`.
+ */
+async function notifyStitchResult(sb: any, args: {
+  adId: string;
+  userId: string;
+  via: string;
+  videoUrl: string;
+  drift: { measured: number | null; delta: number | null } | null;
+  requested: number | null;
+  adCopy: Record<string, any>;
+}) {
+  const { adId, userId, via, videoUrl, drift, requested, adCopy } = args;
+  const kind: "success" | "fallback" | "failed" =
+    via === "fal.ai/compose" ? "success"
+    : via.startsWith("shotstack") ? "fallback"
+    : "failed";
+
+  // Push (best-effort; ignore if function not deployed).
+  try {
+    await sb.functions.invoke("send-push-notification", {
+      body: {
+        userId,
+        title: kind === "success" ? "Re-stitch complete"
+          : kind === "fallback" ? "Re-stitch fell back to Shotstack"
+          : "Re-stitch failed",
+        body: `“${adCopy.title ?? "Your video"}” — drift ${drift?.delta?.toFixed(2) ?? "—"}s (req ${requested ?? "—"}s)`,
+        url: `/library?ad=${adId}`,
+        tag: `stitch-${adId}`,
+      },
+    });
+  } catch (_) { /* push optional */ }
+
+  // Email opt-in check.
+  const { data: prefs } = await sb.from("notification_preferences")
+    .select("video_status_emails").eq("user_id", userId).maybeSingle();
+  if (prefs && prefs.video_status_emails === false) return;
+
+  const { data: profile } = await sb.from("profiles")
+    .select("email").eq("id", userId).maybeSingle();
+  const to = profile?.email;
+  if (!to) return;
+
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendKey) return;
+
+  const subject = kind === "success"
+    ? `Re-stitch succeeded — ${adCopy.title ?? "your video"}`
+    : kind === "fallback"
+    ? `Re-stitch used Shotstack fallback — ${adCopy.title ?? "your video"}`
+    : `Re-stitch failed — ${adCopy.title ?? "your video"}`;
+  const accent = kind === "success" ? "#16a34a" : kind === "fallback" ? "#d97706" : "#dc2626";
+  const html = `
+    <div style="font-family:system-ui,sans-serif;max-width:560px;margin:auto;padding:24px">
+      <h2 style="color:${accent};margin:0 0 12px">${subject}</h2>
+      <p>Stitcher: <strong>${via}</strong></p>
+      <p>Requested duration: ${requested ?? "—"}s &middot; Measured: ${drift?.measured?.toFixed(2) ?? "—"}s &middot; Drift: ${drift?.delta?.toFixed(2) ?? "—"}s</p>
+      <p><a href="https://lyricavid.com/library?ad=${adId}" style="display:inline-block;padding:10px 16px;background:${accent};color:#fff;border-radius:6px;text-decoration:none">Open in Library</a></p>
+      <p style="color:#666;font-size:12px;margin-top:24px">You're receiving this because video status emails are enabled in your notification preferences.</p>
+    </div>`;
+
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${resendKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Lyric A Vid <notify@notify.lyricavid.com>",
+      to: [to],
+      subject,
+      html,
+    }),
+  }).catch((e) => console.warn(`[stitch.notify] email failed:`, e?.message));
 }
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
