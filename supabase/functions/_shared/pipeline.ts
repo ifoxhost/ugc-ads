@@ -444,6 +444,7 @@ export async function regenerateScene(opts: { sceneId: string; userId: string })
     await sb.from("video_scenes").update({
       image_status: "failed",
       error_message: (e as Error).message.slice(0, 500),
+      failed_step: "nano-banana",
     }).eq("id", scene.id);
     throw e;
   }
