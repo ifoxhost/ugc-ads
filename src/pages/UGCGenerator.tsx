@@ -1551,7 +1551,10 @@ const UGCGenerator = () => {
                     </div>
                     
                     <OutputGallery
-                      ads={completedAds.slice(0, 4) as any}
+                      ads={[
+                        ...inProgressAds,
+                        ...completedAds.filter((ad) => !inProgressAds.includes(ad)),
+                      ].slice(0, 4) as any}
                       onDelete={handleDeleteAd}
                       onEditStoryboard={(ad) => setEditingStoryboardAd(ad)}
                       isLoading={loadingAds}
