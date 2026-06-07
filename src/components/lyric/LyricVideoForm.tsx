@@ -74,7 +74,7 @@ export const DEFAULT_LYRIC_FORM: LyricVideoFormData = {
   referenceImageUrl: null,
   referenceImageName: null,
   aiModel: "kling",
-  aiImageModel: "imagen-3",
+  aiImageModel: "nano-banana",
   resolution: "1080p",
   quality: "high",
   fps: 30,
@@ -438,26 +438,12 @@ const LyricVideoForm = ({ formData, onChange, disabled }: LyricVideoFormProps) =
 
             <div className="space-y-2">
               <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">AI Image Engine</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { value: "imagen-3", label: "Imagen 3" },
-                  { value: "midjourney-v6", label: "Midjourney v6" },
-                  { value: "flux-pro", label: "Flux Pro" }
-                ].map((model) => (
-                  <button
-                    key={model.value}
-                    type="button"
-                    onClick={() => update({ aiImageModel: model.value as any })}
-                    className={cn(
-                      "flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all",
-                      formData.aiImageModel === model.value
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border hover:border-primary/40 bg-background/50"
-                    )}
-                  >
-                    <span className="text-[10px] font-semibold">{model.label}</span>
-                  </button>
-                ))}
+              <div className="flex items-center justify-between gap-2 p-3 rounded-xl border border-primary bg-primary/10">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-foreground">Nano Banana</span>
+                  <span className="text-[9px] text-muted-foreground mt-0.5">Google Gemini image — fast, high quality</span>
+                </div>
+                <span className="text-[9px] uppercase tracking-wider font-semibold text-primary">Active</span>
               </div>
             </div>
           </div>
