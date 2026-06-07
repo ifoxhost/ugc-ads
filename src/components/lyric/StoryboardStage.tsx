@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Sparkles, AlertCircle, CheckCircle2, PlayCircle } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles, AlertCircle, CheckCircle2, PlayCircle, Info, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
 
 type SceneRow = {
   id: string;
@@ -16,6 +18,9 @@ type SceneRow = {
   image_status: "pending" | "generating" | "ready" | "failed";
   regen_count: number;
   error_message: string | null;
+  failed_step: string | null;
+  updated_at: string;
+  created_at: string;
 };
 
 type AdRow = {
