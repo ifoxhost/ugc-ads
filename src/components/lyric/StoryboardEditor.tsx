@@ -1100,15 +1100,16 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
                     <Button
                       size="sm"
                       onClick={() => handleRegenerateSceneVideo(clip.id)}
-                      disabled={clip.status === "processing"}
-                      className="h-8 text-[10px] bg-primary hover:bg-primary/95 text-white"
+                      disabled={clip.status === "processing" || !clip.start_reference_image}
+                      title={!clip.start_reference_image ? "Generate the scene image first" : undefined}
+                      className="h-8 text-[10px] bg-primary hover:bg-primary/95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {clip.status === "processing" ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                       ) : (
                         <Sparkles className="h-3.5 w-3.5 mr-1" />
                       )}
-                      Regenerate Scene Video
+                      {!clip.start_reference_image ? "Image required" : "Regenerate Scene Video"}
                     </Button>
                   </div>
 
