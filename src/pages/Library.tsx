@@ -325,19 +325,32 @@ const Library = () => {
     }
   }, [ads, mediaViewer.isOpen, mediaViewer.ad]);
 
-  // Reset slice-phase tracker whenever the viewed ad changes.
+  // Realtime subscription dedicated to the currently-open job's slice status.
+  // Replaces the previous 2s polling fallback; UPDATE events on this row
+  // propagate instantly into ads → mediaViewer.ad via the sync effect above.
   useEffect(() => {
-    prevSlicePhaseRef.current = mediaViewer.ad?.ad_copy?.sliceStatus?.phase ?? null;
-  }, [mediaViewer.ad?.id]);
+    if (!mediaViewer.isOpen || !mediaViewer.ad?.id) return;
+    const adId = mediaViewer.ad.id;
+    const channel = supabase
+      .channel(`reslice-${adId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "generated_ads", filter: `id=eq.${adId}` },
+        () => { fetchAds(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaViewer.isOpen, mediaViewer.ad?.id]);
 
-  // Aggressive polling + transition toast while a Re-slice is active.
+  // Per-job transition toast — fires once when phase moves active → done/failed.
   useEffect(() => {
     if (!mediaViewer.isOpen || !mediaViewer.ad) return;
-    const phase = mediaViewer.ad.ad_copy?.sliceStatus?.phase;
-    const isActive = phase === "queued" || phase === "uploading" || phase === "slicing" || phase === "validating";
+    const adId = mediaViewer.ad.id;
+    const phase = mediaViewer.ad.ad_copy?.sliceStatus?.phase ?? null;
+    const prev = lastSlicePhaseByAdRef.current.get(adId) ?? null;
+    if (prev === phase) return; // no transition → no toast (dedup)
 
-    // Toast when the Re-slice job transitions from active → done/failed
-    const prev = prevSlicePhaseRef.current;
     const wasActive = prev === "queued" || prev === "uploading" || prev === "slicing" || prev === "validating";
     if (wasActive && phase === "done") {
       const count = mediaViewer.ad.ad_copy?.sliceStatus?.sliceCount ?? 0;
@@ -348,17 +361,15 @@ const Library = () => {
       const err = mediaViewer.ad.ad_copy?.sliceStatus?.error ?? "Unknown error";
       sonner.error("Audio re-slice failed", { description: err });
     }
-    prevSlicePhaseRef.current = phase ?? null;
-
-    if (!isActive) return;
-    const interval = setInterval(() => { fetchAds(); }, 2000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    lastSlicePhaseByAdRef.current.set(adId, phase);
   }, [mediaViewer.isOpen, mediaViewer.ad?.id, mediaViewer.ad?.ad_copy?.sliceStatus?.phase]);
+
 
   // Track which ad IDs were "processing" so we can detect transitions → completed
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
-  const prevSlicePhaseRef = useRef<string | null>(null);
+  // Last-seen slice phase per ad-id — prevents duplicate transition toasts.
+  const lastSlicePhaseByAdRef = useRef<Map<string, string | null>>(new Map());
+
 
   useEffect(() => {
     fetchAds();
@@ -753,6 +764,8 @@ const Library = () => {
     } catch { return false; }
   };
 
+  const [copyFallbacks, setCopyFallbacks] = useState<Record<string, { value: string; label: string }>>({});
+
   const copySliceField = useCallback(async (value: string, label: string, key: string) => {
     const ok = await writeToClipboard(value);
     if (ok) {
@@ -761,12 +774,28 @@ const Library = () => {
       });
       setCopiedSliceKey(key);
       setTimeout(() => setCopiedSliceKey((prev) => (prev === key ? null : prev)), 2000);
+      // Clear any prior fallback for this key on success
+      setCopyFallbacks((prev) => {
+        if (!(key in prev)) return prev;
+        const { [key]: _omit, ...rest } = prev;
+        return rest;
+      });
     } else {
       sonner.error("Copy failed", {
-        description: "Clipboard access is blocked. Select the text manually and press Ctrl/Cmd+C.",
+        description: "Clipboard access is blocked. Select the text below and press Ctrl/Cmd+C.",
       });
+      setCopyFallbacks((prev) => ({ ...prev, [key]: { value, label } }));
     }
   }, []);
+
+  const dismissCopyFallback = useCallback((key: string) => {
+    setCopyFallbacks((prev) => {
+      if (!(key in prev)) return prev;
+      const { [key]: _omit, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
 
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const [restitchingIds, setRestitchingIds] = useState<Set<string>>(new Set());
@@ -1856,11 +1885,62 @@ const Library = () => {
                               >
                                 {sl.url}
                               </a>
+                              {(() => {
+                                const keys = [
+                                  `start-${sl.sceneId}`,
+                                  `dur-${sl.sceneId}`,
+                                  `url-${sl.sceneId}`,
+                                  `json-${sl.sceneId}`,
+                                ].filter((k) => copyFallbacks[k]);
+                                if (keys.length === 0) return null;
+                                return (
+                                  <div className="mt-2 space-y-1.5 rounded border border-destructive/30 bg-destructive/5 p-2">
+                                    {keys.map((k) => {
+                                      const fb = copyFallbacks[k];
+                                      const isMulti = fb.value.length > 80 || fb.value.includes("\n");
+                                      return (
+                                        <div key={k} className="space-y-1">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-[10px] font-medium text-destructive">
+                                              Copy failed — select and copy {fb.label.split("•").pop()?.trim() || fb.label}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => dismissCopyFallback(k)}
+                                              className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                                            >
+                                              dismiss
+                                            </button>
+                                          </div>
+                                          {isMulti ? (
+                                            <textarea
+                                              readOnly
+                                              value={fb.value}
+                                              onFocus={(e) => e.currentTarget.select()}
+                                              rows={Math.min(6, fb.value.split("\n").length + 1)}
+                                              className="w-full font-mono text-[10px] rounded border bg-background px-2 py-1 resize-y"
+                                            />
+                                          ) : (
+                                            <input
+                                              type="text"
+                                              readOnly
+                                              value={fb.value}
+                                              onFocus={(e) => e.currentTarget.select()}
+                                              className="w-full font-mono text-[10px] rounded border bg-background px-2 py-1"
+                                            />
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
                               {bad && (
                                 <ul className="mt-1 pl-3 text-[11px] text-destructive list-disc">
                                   {sErrs.map((e, i) => <li key={i}>{e.reason}</li>)}
                                 </ul>
                               )}
+
                             </div>
                           );
                         })}
