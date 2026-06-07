@@ -15,6 +15,7 @@ import { Library, HelpCircle, UserCircle, LogOut, LayoutDashboard, Shield, Video
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUser } from "@/hooks/useUser";
+import NotificationBell from "@/components/NotificationBell";
 
 // SongDoe logo — music note + play arrow combined mark
 const SongDoeLogo = ({ className }: { className?: string }) => (
