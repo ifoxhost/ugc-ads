@@ -317,6 +317,24 @@ const Library = () => {
         }
       }
       
+      // Expiry filter (based on 14-day retention from completed_at)
+      if (expiryFilter !== "all") {
+        const info = getVideoExpiryInfo(ad.completed_at);
+        if (!info) return false;
+        if (expiryFilter === "expiring_soon" && info.daysLeft > 3) return false;
+        if (expiryFilter === "expiring_week" && info.daysLeft > 7) return false;
+        if (expiryFilter === "fresh" && info.daysLeft <= 7) return false;
+      }
+
+      // Duration filter (videos only)
+      if (durationFilter !== "all") {
+        const d = ad.video_duration ?? 0;
+        if (!d) return false;
+        if (durationFilter === "short" && !(d < 30)) return false;
+        if (durationFilter === "medium" && !(d >= 30 && d <= 90)) return false;
+        if (durationFilter === "long" && !(d > 90)) return false;
+      }
+
       // Search filter (search in style label, ad copy, and email for admins)
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -345,13 +363,21 @@ const Library = () => {
         const statusOrder = { completed: 0, processing: 1, failed: 2 };
         comparison = (statusOrder[a.status as keyof typeof statusOrder] || 3) - 
                      (statusOrder[b.status as keyof typeof statusOrder] || 3);
+      } else if (sortBy === "expiry") {
+        const ai = getVideoExpiryInfo(a.completed_at);
+        const bi = getVideoExpiryInfo(b.completed_at);
+        const av = ai ? ai.daysLeft * 24 + ai.hoursLeft : Number.POSITIVE_INFINITY;
+        const bv = bi ? bi.daysLeft * 24 + bi.hoursLeft : Number.POSITIVE_INFINITY;
+        comparison = av - bv;
+      } else if (sortBy === "duration") {
+        comparison = (a.video_duration ?? 0) - (b.video_duration ?? 0);
       }
       
       return sortDirection === "asc" ? comparison : -comparison;
     });
 
     return sorted;
-  }, [ads, statusFilter, styleFilter, emailFilter, dateFilter, searchQuery, sortBy, sortDirection, pendingDeletes, isAdmin, impersonatedUserId]);
+  }, [ads, statusFilter, styleFilter, emailFilter, dateFilter, expiryFilter, durationFilter, searchQuery, sortBy, sortDirection, pendingDeletes, isAdmin, impersonatedUserId]);
 
   const openMediaViewer = (type: 'image' | 'video', url: string, title: string, ad: GeneratedAd) => {
     setMediaViewer({ isOpen: true, type, url, title, ad });
