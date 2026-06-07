@@ -1,7 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireSecrets, jsonError } from "../_shared/startup-checks.ts";
-import { getKieModel, submitKieClip, klingDuration, seedanceDuration } from "../_shared/pipeline.ts";
+import {
+  getKieModel, submitKieClip, klingDuration, seedanceDuration,
+  validateSeedanceAudioRefs, SeedanceAudioRefError,
+} from "../_shared/pipeline.ts";
+import { readCloudinaryEnv, uploadAudioByUrl, sliceUrl } from "../_shared/cloudinary.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,9 +63,57 @@ serve(async (req) => {
     const audioUrl = (adCopy.audioFileUrl ?? null) as string | null;
     const totalDuration = Number(adCopy.duration ?? 60);
 
+    // === Seedance audio slicing ===
+    // For Seedance, we slice the imported Suno audio into ≤15s windows
+    // aligned to each scene's start_sec via Cloudinary transform URLs and
+    // pass them as reference_audio_urls. Strict per-clip validation is
+    // enforced before any Kie submission so failures surface early.
+    let sceneSlices: Record<string, { url: string; durationSec: number; startSec: number }> = {};
+    if (kieModel.kind === "seedance" && audioUrl) {
+      const cld = readCloudinaryEnv();
+      if (cld) {
+        try {
+          let uploaded = (adCopy as any).cloudinaryAudio as {
+            publicId: string; durationSec: number; format: string;
+          } | undefined;
+          if (!uploaded?.publicId) {
+            const up = await uploadAudioByUrl(cld, audioUrl, `lyricavid/${user.id}`);
+            uploaded = { publicId: up.publicId, durationSec: up.durationSec, format: up.format };
+          }
+          const songLen = uploaded.durationSec || totalDuration;
+          for (const s of scenes) {
+            const dur = Math.min(15, Math.max(3, Math.round(Math.max(1, Number(s.end_sec) - Number(s.start_sec)))));
+            const start = Math.max(0, Math.min(Number(s.start_sec) || 0, Math.max(0, songLen - dur)));
+            const url = sliceUrl(cld, uploaded.publicId, start, dur, uploaded.format);
+            // Validate this individual reference before we submit it.
+            try {
+              validateSeedanceAudioRefs([url], [dur]);
+              sceneSlices[s.id] = { url, durationSec: dur, startSec: start };
+            } catch (e) {
+              if (e instanceof SeedanceAudioRefError) {
+                console.warn(`[render] scene ${s.index} audio ref rejected:`, e.details);
+              } else {
+                console.warn(`[render] scene ${s.index} audio ref error:`, (e as Error).message);
+              }
+            }
+          }
+          // Cache uploaded metadata for retries / re-stitches.
+          (adCopy as any).cloudinaryAudio = uploaded;
+          (adCopy as any).sceneAudioSlices = Object.entries(sceneSlices).map(
+            ([sceneId, v]) => ({ sceneId, ...v }),
+          );
+        } catch (e) {
+          console.warn("[render] Cloudinary slicing failed, proceeding without reference audio:",
+            (e as Error).message);
+        }
+      } else {
+        console.warn("[render] CLOUDINARY_* secrets missing — Seedance will run without reference audio");
+      }
+    }
+
     // Submit one Kie clip per scene. Each clip is silent — the user's imported
     // song is muxed in by stitch-lyric-video after all clips finish.
-    const kieTasks: Array<{ sceneId: string; index: number; taskId: string; durationSec: number }> = [];
+    const kieTasks: Array<{ sceneId: string; index: number; taskId: string; durationSec: number; referenceAudioUrl?: string }> = [];
     const failures: Array<{ sceneId: string; error: string }> = [];
 
     for (const s of scenes) {
@@ -75,6 +127,7 @@ serve(async (req) => {
         (s.prompt as any)?.camera,
         (s.prompt as any)?.vfx,
       ].filter(Boolean).join(" ");
+      const refAudio = sceneSlices[s.id]?.url;
       try {
         const taskId = await submitKieClip({
           kind: kieModel.kind,
@@ -87,9 +140,10 @@ serve(async (req) => {
             prompt: promptText,
             durationSec: clipDur,
             aspectRatio: aspect,
+            referenceAudioUrl: refAudio,
           },
         });
-        kieTasks.push({ sceneId: s.id, index: s.index, taskId, durationSec: clipDur });
+        kieTasks.push({ sceneId: s.id, index: s.index, taskId, durationSec: clipDur, referenceAudioUrl: refAudio });
       } catch (e) {
         failures.push({ sceneId: s.id, error: (e as Error).message });
       }
