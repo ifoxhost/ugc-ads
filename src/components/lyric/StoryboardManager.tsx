@@ -613,7 +613,7 @@ function TimelinePreview({
   const [duration, setDuration] = useState(0);
 
   const orderedReady = useMemo(
-    () => scenes.filter((s) => s.image_url).sort((a, b) => a.index - b.index),
+    () => scenes.filter((s) => !s.locked && s.image_url).sort((a, b) => a.index - b.index),
     [scenes],
   );
 
