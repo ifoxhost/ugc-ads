@@ -677,6 +677,35 @@ const Library = () => {
 
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const [restitchingIds, setRestitchingIds] = useState<Set<string>>(new Set());
+  const [reslicingIds, setReslicingIds] = useState<Set<string>>(new Set());
+
+  const handleReslice = async (ad: GeneratedAd) => {
+    setReslicingIds(prev => new Set(prev).add(ad.id));
+    try {
+      const res = await supabase.functions.invoke("slice-suno-audio", {
+        body: { adId: ad.id, force: true },
+      });
+      if (res.error) throw res.error;
+      const data = res.data as { count?: number; errorCount?: number } | null;
+      toast({
+        title: "Audio re-sliced",
+        description: `${data?.count ?? 0} scene slice${data?.count === 1 ? "" : "s"} generated${
+          data?.errorCount ? ` • ${data.errorCount} violation${data.errorCount === 1 ? "" : "s"}` : ""
+        }.`,
+        variant: data?.errorCount ? "destructive" : "default",
+      });
+      fetchAds();
+    } catch (err: any) {
+      console.error("Re-slice error:", err);
+      toast({
+        title: "Re-slice failed",
+        description: err?.message ?? "Could not re-slice audio.",
+        variant: "destructive",
+      });
+    } finally {
+      setReslicingIds(prev => { const s = new Set(prev); s.delete(ad.id); return s; });
+    }
+  };
   const [isBatchRegenerating, setIsBatchRegenerating] = useState(false);
 
   /** Estimated duration in seconds from lyric line count */
