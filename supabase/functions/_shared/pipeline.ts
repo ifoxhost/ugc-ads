@@ -345,48 +345,108 @@ async function generateSceneImage(args: {
 
   // Try Nano Banana 2 (gemini-3.1-flash-image-preview, pro-level quality)
   // first. Fall back to the original Nano Banana (gemini-2.5-flash-image) if
-  // the new model is unavailable, rate-limited, or returns an empty payload.
-  // Each model gets a couple of retries with backoff before falling through.
+  // the new model is unavailable, rate-limited, or returns an empty/invalid
+  // payload. Each model gets a couple of retries with backoff.
   const MODELS: Array<{ id: string; label: string }> = [
     { id: "google/gemini-3.1-flash-image-preview", label: "Nano Banana 2" },
     { id: "google/gemini-2.5-flash-image", label: "Nano Banana" },
   ];
   const ATTEMPTS_PER_MODEL = 2;
+  const MIN_VALID_BYTES = 1024; // anything under 1KB is almost certainly a placeholder/error
   let b64: string | undefined;
   let lastErr = "";
+  const attemptLog: Array<{ model: string; attempt: number; reason: string; ms: number }> = [];
+
   outer: for (const model of MODELS) {
     for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL; attempt++) {
-      const res = await fetch(`${LOVABLE_AI_API}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
-        body: JSON.stringify({
-          model: model.id,
-          modalities: ["image", "text"],
-          messages: [{ role: "user", content: userContent }],
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        lastErr = `${model.label} failed: ${res.status} ${body}`;
-        console.warn(`[nano-banana] ${lastErr}`);
-        // 402 (credits) / 429 (rate limit) — fall through to fallback model immediately.
-        if (res.status === 402 || res.status === 429) continue outer;
-      } else {
-        const json = await res.json();
-        b64 =
-          json?.choices?.[0]?.message?.images?.[0]?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "") ??
-          json?.choices?.[0]?.message?.content?.match(/data:image\/\w+;base64,([^"'\s)]+)/)?.[1];
-        if (b64) { console.log(`[nano-banana] success via ${model.label}`); break outer; }
-        lastErr = `${model.label} returned no image`;
-        console.warn(`[nano-banana] ${lastErr}`);
+      const t0 = Date.now();
+      let reason = "";
+      try {
+        const res = await fetch(`${LOVABLE_AI_API}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
+          body: JSON.stringify({
+            model: model.id,
+            modalities: ["image", "text"],
+            messages: [{ role: "user", content: userContent }],
+          }),
+        });
+
+        if (!res.ok) {
+          const body = await res.text().catch(() => "<no body>");
+          const snippet = body.slice(0, 300).replace(/\s+/g, " ");
+          reason = `HTTP ${res.status} ${res.statusText} — ${snippet}`;
+          lastErr = `${model.label}: ${reason}`;
+          attemptLog.push({ model: model.label, attempt, reason, ms: Date.now() - t0 });
+          console.warn(`[nano-banana] ${model.label} attempt ${attempt} failed — ${reason}`);
+          // credits/rate limit — skip remaining attempts on this model
+          if (res.status === 402 || res.status === 429 || res.status === 401 || res.status === 403) {
+            console.warn(`[nano-banana] ${model.label} unrecoverable (${res.status}); falling back to next model`);
+            continue outer;
+          }
+        } else {
+          const json = await res.json();
+          const finishReason = json?.choices?.[0]?.finish_reason ?? "n/a";
+          const candidate =
+            json?.choices?.[0]?.message?.images?.[0]?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "") ??
+            json?.choices?.[0]?.message?.content?.match(/data:image\/\w+;base64,([^"'\s)]+)/)?.[1];
+
+          if (!candidate) {
+            const contentPreview = typeof json?.choices?.[0]?.message?.content === "string"
+              ? json.choices[0].message.content.slice(0, 200).replace(/\s+/g, " ")
+              : JSON.stringify(json?.choices?.[0]?.message ?? json).slice(0, 200);
+            reason = `empty payload (finish_reason=${finishReason}, preview="${contentPreview}")`;
+            lastErr = `${model.label}: ${reason}`;
+            attemptLog.push({ model: model.label, attempt, reason, ms: Date.now() - t0 });
+            console.warn(`[nano-banana] ${model.label} attempt ${attempt} — ${reason}`);
+          } else {
+            // Validate the base64 actually decodes to a sane PNG/JPEG.
+            let decoded: Uint8Array | null = null;
+            try { decoded = Uint8Array.from(atob(candidate), (c) => c.charCodeAt(0)); } catch (e) {
+              reason = `invalid base64 (${(e as Error).message})`;
+            }
+            if (decoded) {
+              if (decoded.byteLength < MIN_VALID_BYTES) {
+                reason = `payload too small (${decoded.byteLength} bytes < ${MIN_VALID_BYTES})`;
+              } else {
+                // Magic bytes: PNG = 89 50 4E 47, JPEG = FF D8 FF
+                const isPng = decoded[0] === 0x89 && decoded[1] === 0x50 && decoded[2] === 0x4e && decoded[3] === 0x47;
+                const isJpg = decoded[0] === 0xff && decoded[1] === 0xd8 && decoded[2] === 0xff;
+                if (!isPng && !isJpg) {
+                  reason = `unrecognized image format (magic=${decoded[0]?.toString(16)} ${decoded[1]?.toString(16)} ${decoded[2]?.toString(16)} ${decoded[3]?.toString(16)})`;
+                }
+              }
+            }
+            if (reason) {
+              lastErr = `${model.label}: ${reason}`;
+              attemptLog.push({ model: model.label, attempt, reason, ms: Date.now() - t0 });
+              console.warn(`[nano-banana] ${model.label} attempt ${attempt} — ${reason}`);
+            } else {
+              b64 = candidate;
+              attemptLog.push({ model: model.label, attempt, reason: `success (${decoded!.byteLength} bytes, finish=${finishReason})`, ms: Date.now() - t0 });
+              console.log(`[nano-banana] success via ${model.label} on attempt ${attempt} (${decoded!.byteLength} bytes, ${Date.now() - t0}ms)`);
+              break outer;
+            }
+          }
+        }
+      } catch (e) {
+        reason = `network/exception: ${(e as Error).message}`;
+        lastErr = `${model.label}: ${reason}`;
+        attemptLog.push({ model: model.label, attempt, reason, ms: Date.now() - t0 });
+        console.warn(`[nano-banana] ${model.label} attempt ${attempt} — ${reason}`);
       }
+
       if (attempt < ATTEMPTS_PER_MODEL) {
         await new Promise((r) => setTimeout(r, 800 * attempt));
       }
     }
+    console.warn(`[nano-banana] ${model.label} exhausted ${ATTEMPTS_PER_MODEL} attempts, falling back`);
   }
-  if (!b64) throw new Error(lastErr || "Nano Banana returned no image");
 
+  if (!b64) {
+    console.error(`[nano-banana] all models failed. Attempt log:`, JSON.stringify(attemptLog, null, 2));
+    throw new Error(`Image generation failed across all models. Last: ${lastErr}. Attempts: ${JSON.stringify(attemptLog)}`);
+  }
 
   // Upload to permanent storage — versioned filename to bust caches on regen.
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -397,7 +457,11 @@ async function generateSceneImage(args: {
   });
   if (upErr) throw upErr;
   const { data: pub } = sb.storage.from("generated-images").getPublicUrl(path);
-  return { url: pub.publicUrl };
+  // Append cache-bust param so the UI <img> tag always refetches even if the
+  // path is reused (regen produces a new filename, but downstream consumers
+  // may render the same URL twice across sessions).
+  const bust = `?v=${Date.now()}`;
+  return { url: `${pub.publicUrl}${bust}` };
 }
 
 // Resolve reference image URLs for an ad — combines persisted refs + pexels +
