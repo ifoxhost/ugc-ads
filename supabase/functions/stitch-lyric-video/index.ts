@@ -247,14 +247,14 @@ async function stitchWithFal(opts: {
     body: JSON.stringify({ tracks, output_format: "mp4" }),
   });
   if (!submitRes.ok) {
-    console.error(`[stitch.fal] submit failed ${submitRes.status} ${await submitRes.text()}`);
+    console.error(`[stitch.fal] submit failed ${submitRes.status} ${redact(await submitRes.text(), falKey)}`);
     return null;
   }
   const submitJson = await submitRes.json();
   const statusUrl: string | undefined = submitJson.status_url;
   const responseUrl: string | undefined = submitJson.response_url;
   if (!statusUrl || !responseUrl) {
-    console.error(`[stitch.fal] no status/response URLs:`, submitJson);
+    console.error(`[stitch.fal] no status/response URLs:`, redact(submitJson, falKey));
     return null;
   }
 
@@ -269,7 +269,7 @@ async function stitchWithFal(opts: {
     const status = (j.status ?? "").toUpperCase();
     if (status === "COMPLETED") break;
     if (status === "FAILED" || status === "ERROR") {
-      console.error(`[stitch.fal] job failed:`, j);
+      console.error(`[stitch.fal] job failed:`, redact(j, falKey));
       return null;
     }
   }
@@ -284,7 +284,7 @@ async function stitchWithFal(opts: {
   const out = await rr.json();
   const videoUrl: string | undefined = out?.video_url ?? out?.video?.url ?? out?.output?.url;
   if (!videoUrl) {
-    console.error(`[stitch.fal] no video_url in response:`, out);
+    console.error(`[stitch.fal] no video_url in response:`, redact(out, falKey));
     return null;
   }
   return videoUrl;
