@@ -672,6 +672,31 @@ async function notifyStitchResult(sb: any, args: {
     : via.startsWith("shotstack") ? "fallback"
     : "failed";
 
+  const niceTitle =
+    kind === "success" ? "Re-stitch complete"
+    : kind === "fallback" ? "Re-stitch fell back to Shotstack"
+    : "Re-stitch failed";
+  const niceBody = `“${adCopy.title ?? "Your video"}” — drift ${drift?.delta?.toFixed(2) ?? "—"}s (req ${requested ?? "—"}s)`;
+
+  // In-app notification row — feeds the bell icon + /notifications page.
+  try {
+    await sb.from("notifications").insert({
+      user_id: userId,
+      type: kind === "success" ? "stitch_success" : kind === "fallback" ? "stitch_fallback" : "stitch_failed",
+      title: niceTitle,
+      body: niceBody,
+      url: `/library?ad=${adId}`,
+      metadata: {
+        adId,
+        stitcher: via,
+        videoUrl,
+        requestedDurationSec: requested,
+        measuredDurationSec: drift?.measured ?? null,
+        driftSec: drift?.delta ?? null,
+      },
+    });
+  } catch (e) { console.warn(`[stitch.notify] db insert failed:`, (e as Error).message); }
+
   // Push (best-effort; ignore if function not deployed).
   try {
     await sb.functions.invoke("send-push-notification", {

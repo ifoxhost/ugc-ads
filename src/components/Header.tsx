@@ -11,10 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Library, HelpCircle, UserCircle, LogOut, LayoutDashboard, Shield, Video } from "lucide-react";
+import { Library, HelpCircle, UserCircle, LogOut, LayoutDashboard, Shield, Video, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUser } from "@/hooks/useUser";
+import NotificationBell from "@/components/NotificationBell";
 
 // SongDoe logo — music note + play arrow combined mark
 const SongDoeLogo = ({ className }: { className?: string }) => (
@@ -87,6 +88,7 @@ const Header = () => {
               <Button className="hidden sm:flex rounded-full bg-white hover:bg-white/90 text-black font-semibold h-10 px-5 text-[14px] gap-1.5" asChild>
                 <Link to="/create"><Video className="h-4 w-4" /> Create Video</Link>
               </Button>
+              <NotificationBell variant="dark" />
               <DropdownMenu>
                 <DropdownMenuTrigger className="focus:outline-none">
                   <Avatar className="h-7 w-7 sm:h-9 sm:w-9 border-2 border-white/20 hover:border-primary/60 transition-colors cursor-pointer">
@@ -113,7 +115,10 @@ const Header = () => {
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem asChild>
-                    <Link to="/library" className="cursor-pointer"><Library className="mr-2 h-4 w-4" />My Videos</Link>
+                   <Link to="/library" className="cursor-pointer"><Library className="mr-2 h-4 w-4" />My Videos</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/notifications" className="cursor-pointer"><Bell className="mr-2 h-4 w-4" />Notifications</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/account" className="cursor-pointer"><UserCircle className="mr-2 h-4 w-4" />Account</Link>
@@ -157,6 +162,7 @@ const Header = () => {
             <Button className="hidden sm:flex rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5" asChild>
               <Link to="/create"><Video className="h-4 w-4" /> Create Video</Link>
             </Button>
+            <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger className="focus:outline-none">
                 <Avatar className="h-7 w-7 sm:h-9 sm:w-9 border-2 border-border hover:border-primary/50 transition-colors cursor-pointer">
@@ -183,7 +189,10 @@ const Header = () => {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem asChild>
-                  <Link to="/library" className="cursor-pointer"><Library className="mr-2 h-4 w-4" />My Videos</Link>
+                 <Link to="/library" className="cursor-pointer"><Library className="mr-2 h-4 w-4" />My Videos</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/notifications" className="cursor-pointer"><Bell className="mr-2 h-4 w-4" />Notifications</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/account" className="cursor-pointer"><UserCircle className="mr-2 h-4 w-4" />Account</Link>

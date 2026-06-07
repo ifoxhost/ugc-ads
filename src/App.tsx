@@ -20,6 +20,7 @@ import Payments from "./pages/Payments";
 import Dashboard from "./pages/Dashboard";
 import Trash from "./pages/Trash";
 import NotificationPreferences from "./pages/NotificationPreferences";
+import Notifications from "./pages/Notifications";
 import About from "./pages/About";
 import Changelog from "./pages/Changelog";
 import Careers from "./pages/Careers";
@@ -104,7 +105,8 @@ const App = () => (
                   <Route path="/trash" element={<ProtectedRoute><Trash /></ProtectedRoute>} />
                   <Route path="/help" element={<ProtectedRoute><Help /></ProtectedRoute>} />
                   <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-                  <Route path="/account/notifications" element={<ProtectedRoute><NotificationPreferences /></ProtectedRoute>} />
+                 <Route path="/account/notifications" element={<ProtectedRoute><NotificationPreferences /></ProtectedRoute>} />
+                 <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
                   <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
                   <Route path="/payments/success" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
                   <Route path="/payments/cancel" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
