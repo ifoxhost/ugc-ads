@@ -31,6 +31,41 @@ const SHOTSTACK_STAGE = "https://api.shotstack.io/edit/stage";
 
 // Duration drift we'll accept before rejecting a stitched output (seconds).
 const DURATION_TOLERANCE_SEC = 1.5;
+// How many times we retry fal.ai compose end-to-end (submit + validate)
+// before giving up and handing off to Shotstack.
+const FAL_MAX_ATTEMPTS = 2;
+
+// Validate FAL_KEY shape at module-load: fal keys are `<uuid>:<hex>` and
+// MUST never appear in logs. Returns the key only when usable.
+function loadFalKey(): string | null {
+  const raw = Deno.env.get("FAL_KEY");
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  // Loose shape check — must look like "<id>:<secret>", neither part empty.
+  if (!/^[^\s:]+:[^\s:]+$/.test(trimmed)) {
+    console.error("[stitch.fal] FAL_KEY present but malformed (expected '<id>:<secret>'); ignoring");
+    return null;
+  }
+  return trimmed;
+}
+
+// Redact any occurrence of the fal key (or fragments of it) in arbitrary text
+// so we never echo it back through logs, error responses, or DB rows.
+function redact(input: unknown, secret: string | null): string {
+  let s = typeof input === "string" ? input : (() => {
+    try { return JSON.stringify(input); } catch { return String(input); }
+  })();
+  if (secret) {
+    s = s.split(secret).join("[FAL_KEY]");
+    // Also redact each half in case fal echoes only the id or secret half.
+    for (const half of secret.split(":")) {
+      if (half.length >= 8) s = s.split(half).join("[FAL_KEY]");
+    }
+  }
+  // Catch generic `Key xxx` / `Bearer xxx` patterns just in case.
+  s = s.replace(/(Key|Bearer)\s+[A-Za-z0-9_\-:.]+/gi, "$1 [REDACTED]");
+  return s;
+}
 
 interface KieTask {
   sceneId: string;
