@@ -88,6 +88,7 @@ const Header = () => {
               <Button className="hidden sm:flex rounded-full bg-white hover:bg-white/90 text-black font-semibold h-10 px-5 text-[14px] gap-1.5" asChild>
                 <Link to="/create"><Video className="h-4 w-4" /> Create Video</Link>
               </Button>
+              <NotificationBell variant="dark" />
               <DropdownMenu>
                 <DropdownMenuTrigger className="focus:outline-none">
                   <Avatar className="h-7 w-7 sm:h-9 sm:w-9 border-2 border-white/20 hover:border-primary/60 transition-colors cursor-pointer">
