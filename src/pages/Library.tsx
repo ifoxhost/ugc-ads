@@ -1885,11 +1885,62 @@ const Library = () => {
                               >
                                 {sl.url}
                               </a>
+                              {(() => {
+                                const keys = [
+                                  `start-${sl.sceneId}`,
+                                  `dur-${sl.sceneId}`,
+                                  `url-${sl.sceneId}`,
+                                  `json-${sl.sceneId}`,
+                                ].filter((k) => copyFallbacks[k]);
+                                if (keys.length === 0) return null;
+                                return (
+                                  <div className="mt-2 space-y-1.5 rounded border border-destructive/30 bg-destructive/5 p-2">
+                                    {keys.map((k) => {
+                                      const fb = copyFallbacks[k];
+                                      const isMulti = fb.value.length > 80 || fb.value.includes("\n");
+                                      return (
+                                        <div key={k} className="space-y-1">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-[10px] font-medium text-destructive">
+                                              Copy failed — select and copy {fb.label.split("•").pop()?.trim() || fb.label}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => dismissCopyFallback(k)}
+                                              className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                                            >
+                                              dismiss
+                                            </button>
+                                          </div>
+                                          {isMulti ? (
+                                            <textarea
+                                              readOnly
+                                              value={fb.value}
+                                              onFocus={(e) => e.currentTarget.select()}
+                                              rows={Math.min(6, fb.value.split("\n").length + 1)}
+                                              className="w-full font-mono text-[10px] rounded border bg-background px-2 py-1 resize-y"
+                                            />
+                                          ) : (
+                                            <input
+                                              type="text"
+                                              readOnly
+                                              value={fb.value}
+                                              onFocus={(e) => e.currentTarget.select()}
+                                              className="w-full font-mono text-[10px] rounded border bg-background px-2 py-1"
+                                            />
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
                               {bad && (
                                 <ul className="mt-1 pl-3 text-[11px] text-destructive list-disc">
                                   {sErrs.map((e, i) => <li key={i}>{e.reason}</li>)}
                                 </ul>
                               )}
+
                             </div>
                           );
                         })}
