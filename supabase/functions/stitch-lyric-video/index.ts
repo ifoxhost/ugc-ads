@@ -145,13 +145,13 @@ serve(async (req) => {
     let lastFalDrift: { measured: number | null; delta: number | null } | null = null;
     let falAttempts = 0;
     if (falKey) {
-      for (let attempt = 1; attempt <= FAL_MAX_ATTEMPTS; attempt++) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         falAttempts = attempt;
         const entry: AuditEntry = {
           stitcher: "fal.ai/compose",
           attempt,
           startedAt: new Date().toISOString(),
-          tolerance: DURATION_TOLERANCE_SEC,
+          tolerance: tolerance,
           requestedDurationSec: totalDuration,
           redactionApplied: true,
         };
@@ -163,7 +163,7 @@ serve(async (req) => {
             entry.outcome = "no_url";
             entry.endedAt = new Date().toISOString();
             audit.push(entry);
-            console.warn(`[stitch] fal attempt=${attempt}/${FAL_MAX_ATTEMPTS} returned no url ad=${adId}`);
+            console.warn(`[stitch] fal attempt=${attempt}/${maxAttempts} returned no url ad=${adId}`);
             continue;
           }
           const drift = await validateDuration(falUrl, totalDuration);
@@ -177,13 +177,13 @@ serve(async (req) => {
             audit.push(entry);
             console.log(`[stitch] fal OK ad=${adId} attempt=${attempt} drift=${drift.delta}s`);
             await finalize(sb, ad.id, ad.user_id, falUrl, adCopy, "fal.ai/compose", drift, {
-              attempts: attempt, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+              attempts: attempt, tolerance: tolerance, requested: totalDuration,
             }, audit, startedAt);
             return json({ success: true, videoUrl: falUrl, via: "fal", attempt, drift });
           }
           entry.outcome = "drift_rejected";
           audit.push(entry);
-          console.warn(`[stitch] fal drift too large ad=${adId} attempt=${attempt} delta=${drift.delta}s tolerance=${DURATION_TOLERANCE_SEC}s — retrying`);
+          console.warn(`[stitch] fal drift too large ad=${adId} attempt=${attempt} delta=${drift.delta}s tolerance=${tolerance}s — retrying`);
         } catch (e) {
           entry.outcome = "error";
           entry.error = redact((e as Error).message, falKey);
@@ -192,14 +192,14 @@ serve(async (req) => {
           console.error(`[stitch] fal error ad=${adId} attempt=${attempt}:`, entry.error);
         }
       }
-      console.warn(`[stitch] fal exhausted ${FAL_MAX_ATTEMPTS} attempts ad=${adId} — falling back to Shotstack`);
+      console.warn(`[stitch] fal exhausted ${maxAttempts} attempts ad=${adId} — falling back to Shotstack`);
     } else {
       audit.push({
         stitcher: "fal.ai/compose",
         attempt: 0,
         outcome: "skipped_no_key",
         requestedDurationSec: totalDuration,
-        tolerance: DURATION_TOLERANCE_SEC,
+        tolerance: tolerance,
         redactionApplied: true,
         startedAt: new Date().toISOString(),
         endedAt: new Date().toISOString(),
@@ -213,7 +213,7 @@ serve(async (req) => {
         stitcher: "shotstack",
         attempt: 1,
         startedAt: new Date().toISOString(),
-        tolerance: DURATION_TOLERANCE_SEC,
+        tolerance: tolerance,
         requestedDurationSec: totalDuration,
         redactionApplied: true,
       };
@@ -233,7 +233,7 @@ serve(async (req) => {
           console.log(`[stitch] shotstack OK ad=${adId} drift=${drift.delta}s ok=${drift.ok}`);
           await finalize(sb, ad.id, ad.user_id, ssUrl, adCopy,
             drift.ok ? "shotstack" : "shotstack_with_drift", drift, {
-              attempts: 1, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+              attempts: 1, tolerance: tolerance, requested: totalDuration,
               falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
             }, audit, startedAt);
           return json({ success: true, videoUrl: ssUrl, via: "shotstack", drift });
@@ -254,7 +254,7 @@ serve(async (req) => {
         attempt: 0,
         outcome: "skipped_no_key",
         requestedDurationSec: totalDuration,
-        tolerance: DURATION_TOLERANCE_SEC,
+        tolerance: tolerance,
         redactionApplied: true,
         startedAt: new Date().toISOString(),
         endedAt: new Date().toISOString(),
@@ -269,13 +269,13 @@ serve(async (req) => {
       attempt: 1,
       outcome: "accepted",
       requestedDurationSec: totalDuration,
-      tolerance: DURATION_TOLERANCE_SEC,
+      tolerance: tolerance,
       redactionApplied: true,
       startedAt: new Date().toISOString(),
       endedAt: new Date().toISOString(),
     });
     await finalize(sb, ad.id, ad.user_id, firstUrl, adCopy, "first_clip_fallback", null, {
-      attempts: 0, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+      attempts: 0, tolerance: tolerance, requested: totalDuration,
       falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
     }, audit, startedAt);
     return json({ success: true, videoUrl: firstUrl, via: "first_clip" });
