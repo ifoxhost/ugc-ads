@@ -554,7 +554,7 @@ export async function regenerateFailedScenes(opts: { adId: string; userId: strin
 //   - Veo has its own endpoint → POST /api/v1/veo/generate, polled at
 //     /api/v1/veo/record-info (but recordInfo also accepts veo taskIds).
 const KIE_MODELS: Record<string, { id: string; endpoint: string; kind: "market" | "veo" }> = {
-  kling: { id: "kling-3.0", endpoint: `${KIE_AI_API}/api/v1/jobs/createTask`, kind: "market" },
+  kling: { id: "kling-2.6", endpoint: `${KIE_AI_API}/api/v1/jobs/createTask`, kind: "market" },
   veo:   { id: "veo-3.1",   endpoint: `${KIE_AI_API}/api/v1/veo/generate`,   kind: "veo"    },
 };
 
@@ -590,6 +590,7 @@ export async function submitKieRender(adId: string, payload: Record<string, unkn
     ?? params.referenceImageUrl as string | undefined;
   const prompt = String(params.prompt ?? "Lyric video");
   const aspect = kieAspect(params.aspectRatio);
+  const duration = klingDuration(params.duration);
 
   let body: Record<string, unknown>;
   if (kind === "veo") {
@@ -601,19 +602,29 @@ export async function submitKieRender(adId: string, payload: Record<string, unkn
       enableFallback: true,
     };
   } else {
-    // Market (Kling)
-    body = {
-      model: modelId || "kling-3.0",
-      input: {
-        prompt,
-        image_urls: firstImage ? [firstImage] : undefined,
-        aspect_ratio: aspect,
-        duration: klingDuration(params.duration),
-        mode: "pro",
-        multi_shots: false,
-        sound: true,
-      },
-    };
+    // Kling 2.6 — image-to-video when we have a reference image, else text-to-video.
+    const baseModel = (modelId || "kling-2.6").replace(/\/(image|text)-to-video$/, "");
+    if (firstImage) {
+      body = {
+        model: `${baseModel}/image-to-video`,
+        input: {
+          prompt,
+          image_urls: [firstImage],
+          sound: true,
+          duration,
+        },
+      };
+    } else {
+      body = {
+        model: `${baseModel}/text-to-video`,
+        input: {
+          prompt,
+          sound: true,
+          aspect_ratio: aspect,
+          duration,
+        },
+      };
+    }
   }
 
   const res = await fetch(endpoint, {
