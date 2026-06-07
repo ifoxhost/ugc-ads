@@ -210,6 +210,17 @@ export default function StoryboardStage({ adId, onClose }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
+          <Button
+            variant="outline" size="sm"
+            disabled={regenAllLoading || scenes.length === 0 || stage === "rendering"}
+            onClick={handleRegenAll}>
+            {regenAllLoading ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-1" />
+            )}
+            Re-roll all
+          </Button>
           {ad?.generated_video_url ? (
             <Button asChild size="sm">
               <a href={ad.generated_video_url} target="_blank" rel="noreferrer">
