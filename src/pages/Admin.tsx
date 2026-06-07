@@ -9,6 +9,7 @@ import { ImageGenerationsManagement } from "@/components/admin/ImageGenerationsM
 import { DashboardStats } from "@/components/admin/DashboardStats";
 import { SubscriptionsManagement } from "@/components/admin/SubscriptionsManagement";
 import { UpcomingRenewalsWidget } from "@/components/admin/UpcomingRenewalsWidget";
+import { AppSettingsManagement } from "@/components/admin/AppSettingsManagement";
 
 const Admin = () => {
   const { isAdmin, loading } = useUserRole();
@@ -54,11 +55,12 @@ const Admin = () => {
 
         {/* Management Tabs */}
         <Tabs defaultValue="subscriptions" className="mt-8">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="videos">Videos</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="subscriptions">
@@ -75,6 +77,10 @@ const Admin = () => {
 
           <TabsContent value="images">
             <ImageGenerationsManagement />
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <AppSettingsManagement />
           </TabsContent>
         </Tabs>
       </div>

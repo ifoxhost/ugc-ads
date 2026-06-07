@@ -21,6 +21,16 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+async function getTtl(sb: ReturnType<typeof createClient>, key: string, envName: string, fallback: number): Promise<number> {
+  try {
+    const { data } = await sb.from("app_settings").select("value").eq("key", key).maybeSingle();
+    const v = data?.value;
+    const n = typeof v === "number" ? v : typeof v === "string" ? parseInt(v, 10) : NaN;
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch (e) { console.warn("[cleanup] settings read failed", (e as Error).message); }
+  return envInt(envName, fallback);
+}
+
 async function listAll(sb: ReturnType<typeof createClient>, bucket: string, prefix = ""): Promise<{ name: string; updated_at?: string; created_at?: string }[]> {
   const all: any[] = [];
   let page = 0;
@@ -51,8 +61,8 @@ serve(async (req) => {
   try {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    const refTtlDays = envInt("STORYBOARD_REF_TTL_DAYS", 7);
-    const imgTtlDays = envInt("STORYBOARD_IMAGE_TTL_DAYS", 14);
+    const refTtlDays = await getTtl(sb, "storyboard_ref_ttl_days", "STORYBOARD_REF_TTL_DAYS", 7);
+    const imgTtlDays = await getTtl(sb, "storyboard_image_ttl_days", "STORYBOARD_IMAGE_TTL_DAYS", 14);
     const now = Date.now();
     const refCutoff = now - refTtlDays * 86_400_000;
     const imgCutoff = now - imgTtlDays * 86_400_000;

@@ -85,6 +85,10 @@ export default function StoryboardStage({ adId, onClose }: Props) {
   const stage: string = ad?.ad_copy?.pipelineStage ?? "script";
   const allReady = scenes.length > 0 && scenes.every((s) => s.image_status === "ready" && s.image_url);
   const anyFailed = scenes.some((s) => s.image_status === "failed");
+  // Derive "Re-roll all in progress" from server state so a refresh keeps the UI in sync.
+  const reRollInFlight = scenes.length > 0
+    && scenes.filter((s) => s.image_status === "generating" || s.image_status === "pending").length >= 2;
+  const showRegenAllBusy = regenAllLoading || reRollInFlight;
 
   const handleRegen = async (sceneId: string) => {
     setRegenLoading(sceneId);
@@ -196,15 +200,19 @@ export default function StoryboardStage({ adId, onClose }: Props) {
                   <p className="text-[11px] text-destructive">{s.error_message}</p>
                 )}
                 <Button
-                  size="sm" variant="outline" className="w-full"
-                  disabled={regenLoading === s.id || s.image_status === "generating" || regenAllLoading}
+                  size="sm"
+                  variant={s.image_status === "failed" ? "destructive" : "outline"}
+                  className="w-full"
+                  disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
                   onClick={() => handleRegen(s.id)}>
                   {regenLoading === s.id || s.image_status === "generating" ? (
                     <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                   ) : (
                     <RefreshCw className="w-3 h-3 mr-1" />
                   )}
-                  Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}
+                  {s.image_status === "failed"
+                    ? "Retry failed"
+                    : <>Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}</>}
                 </Button>
               </div>
             </div>
@@ -234,14 +242,14 @@ export default function StoryboardStage({ adId, onClose }: Props) {
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
           <Button
             variant="outline" size="sm"
-            disabled={regenAllLoading || scenes.length === 0 || stage === "rendering"}
+            disabled={showRegenAllBusy || scenes.length === 0 || stage === "rendering"}
             onClick={handleRegenAll}>
-            {regenAllLoading ? (
+            {showRegenAllBusy ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
             ) : (
               <RefreshCw className="w-4 h-4 mr-1" />
             )}
-            Re-roll all
+            {showRegenAllBusy ? "Re-rolling…" : "Re-roll all"}
           </Button>
           {ad?.generated_video_url ? (
             <Button asChild size="sm">
