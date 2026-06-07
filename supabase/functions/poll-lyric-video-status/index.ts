@@ -45,7 +45,7 @@ serve(async (req) => {
       }
       try {
         const { status, videoUrl } = await pollKieTask(ad.video_task_id);
-        if (videoUrl && (status === "completed" || status === "success" || status === "succeeded")) {
+        if (videoUrl && (status === "completed" || status === "success" || status === "succeeded" || status === "done")) {
           await sb.from("generated_ads").update({
             status: "completed", video_status: "completed",
             video_progress: 100, generated_video_url: videoUrl,

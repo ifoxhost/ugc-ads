@@ -32,7 +32,7 @@ const MAX_SCENES = 8;
 const NANO_BANANA_CONCURRENCY = 3;
 const OPENAI_API = "https://api.openai.com/v1";
 const LOVABLE_AI_API = "https://ai.gateway.lovable.dev/v1";
-const KIE_AI_API = "https://api.kie.ai/v1";
+const KIE_AI_API = "https://api.kie.ai";
 
 function service(): SupabaseClient {
   return createClient(
@@ -548,28 +548,84 @@ export async function regenerateFailedScenes(opts: { adId: string; userId: strin
 
 
 // ── Kie.ai render submit + poll helpers (used by render & poll functions) ───
-const KIE_MODELS: Record<string, { id: string; endpoint: string }> = {
-  kling: { id: "kling-3.0", endpoint: `${KIE_AI_API}/kling/generate` },
-  veo:   { id: "veo-3.1",   endpoint: `${KIE_AI_API}/veo/generate`   },
+// Kie.ai uses two different endpoint shapes:
+//   - Market models (Kling, Seedream, etc.) → POST /api/v1/jobs/createTask
+//     with body { model, input } and are polled via /api/v1/jobs/recordInfo
+//   - Veo has its own endpoint → POST /api/v1/veo/generate, polled at
+//     /api/v1/veo/record-info (but recordInfo also accepts veo taskIds).
+const KIE_MODELS: Record<string, { id: string; endpoint: string; kind: "market" | "veo" }> = {
+  kling: { id: "kling-3.0", endpoint: `${KIE_AI_API}/api/v1/jobs/createTask`, kind: "market" },
+  veo:   { id: "veo-3.1",   endpoint: `${KIE_AI_API}/api/v1/veo/generate`,   kind: "veo"    },
 };
 
 export function getKieModel(key: string) {
   return KIE_MODELS[key] ?? null;
 }
 
+// Map our internal aspect ratios to Kie-supported ones.
+function kieAspect(r: unknown): "16:9" | "9:16" | "1:1" {
+  const s = String(r ?? "9:16");
+  if (s === "16:9" || s === "9:16" || s === "1:1") return s;
+  if (s === "4:5") return "9:16";
+  return "9:16";
+}
+
+// Kling clamps duration to 5 or 10 seconds (string). Pick the closest.
+function klingDuration(sec: unknown): "5" | "10" {
+  const n = Number(sec ?? 5);
+  return n >= 8 ? "10" : "5";
+}
+
 export async function submitKieRender(adId: string, payload: Record<string, unknown>): Promise<string> {
   const key = Deno.env.get("KIE_AI_API_KEY");
   if (!key) throw new Error("KIE_AI_API_KEY missing");
+
   const endpoint = String(payload.endpoint);
+  const kind = String(payload.kind ?? "market");
+  const modelId = String(payload.modelId ?? "");
+  const params = (payload.params ?? {}) as Record<string, unknown>;
+
+  const storyboard = (params.storyboard ?? []) as Array<{ imageUrl?: string }>;
+  const firstImage = storyboard.find((s) => s?.imageUrl)?.imageUrl
+    ?? params.referenceImageUrl as string | undefined;
+  const prompt = String(params.prompt ?? "Lyric video");
+  const aspect = kieAspect(params.aspectRatio);
+
+  let body: Record<string, unknown>;
+  if (kind === "veo") {
+    body = {
+      prompt,
+      imageUrls: firstImage ? [firstImage] : undefined,
+      model: "veo3_fast",
+      aspectRatio: aspect,
+      enableFallback: true,
+    };
+  } else {
+    // Market (Kling)
+    body = {
+      model: modelId || "kling-3.0",
+      input: {
+        prompt,
+        image_urls: firstImage ? [firstImage] : undefined,
+        aspect_ratio: aspect,
+        duration: klingDuration(params.duration),
+        mode: "pro",
+        multi_shots: false,
+        sound: true,
+      },
+    };
+  }
+
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify(payload.params),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Kie.ai submit failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
-  const taskId = data.taskId ?? data.task_id ?? data.id;
-  if (!taskId) throw new Error("Kie.ai returned no taskId");
+  const d = data?.data ?? data;
+  const taskId = d?.taskId ?? d?.task_id ?? d?.id ?? data?.taskId;
+  if (!taskId) throw new Error(`Kie.ai returned no taskId: ${JSON.stringify(data).slice(0, 300)}`);
   await patchAd(adId, { video_task_id: String(taskId), video_status: "processing" });
   return String(taskId);
 }
@@ -577,13 +633,36 @@ export async function submitKieRender(adId: string, payload: Record<string, unkn
 export async function pollKieTask(taskId: string): Promise<{ status: string; videoUrl?: string }> {
   const key = Deno.env.get("KIE_AI_API_KEY");
   if (!key) throw new Error("KIE_AI_API_KEY missing");
-  const res = await fetch(`${KIE_AI_API}/tasks/${encodeURIComponent(taskId)}`, {
-    headers: { Authorization: `Bearer ${key}` },
-  });
+  const res = await fetch(
+    `${KIE_AI_API}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
+    { headers: { Authorization: `Bearer ${key}` } },
+  );
   if (!res.ok) throw new Error(`Kie.ai poll failed: ${res.status}`);
-  const data = await res.json();
-  const status = String(data.status ?? data.state ?? "pending").toLowerCase();
-  const videoUrl: string | undefined =
-    data.videoUrl ?? data.video_url ?? data.output?.videoUrl ?? data.result?.videoUrl;
+  const json = await res.json();
+  const d = json?.data ?? json;
+  // recordInfo returns { state: "waiting|queuing|generating|success|fail", resultJson, ... }
+  const rawState = String(d?.state ?? d?.status ?? "pending").toLowerCase();
+  const status =
+    rawState === "success" ? "completed" :
+    rawState === "fail" ? "failed" :
+    rawState;
+
+  let videoUrl: string | undefined;
+  const candidates = [d?.resultJson, d?.response, d?.result, d?.output];
+  for (const c of candidates) {
+    if (!c) continue;
+    const parsed = typeof c === "string" ? safeJsonParse(c) : c;
+    videoUrl ??=
+      parsed?.videoUrl ??
+      parsed?.video_url ??
+      parsed?.resultUrls?.[0] ??
+      parsed?.videos?.[0]?.url ??
+      parsed?.videos?.[0] ??
+      undefined;
+  }
   return { status, videoUrl };
+}
+
+function safeJsonParse(s: string): any {
+  try { return JSON.parse(s); } catch { return null; }
 }
