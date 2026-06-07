@@ -1,7 +1,7 @@
 // Local Mock / Sandboxed Supabase Client for local testing
 import { Database } from './types';
 
-const IS_MOCK = import.meta.env.DEV || import.meta.env.VITE_LOCAL_MOCK === 'true';
+const IS_MOCK = import.meta.env.VITE_LOCAL_MOCK === 'true';
 
 // Mock User Details
 const mockUser = {
