@@ -214,10 +214,21 @@ export default function StoryboardStage({ adId, onClose }: Props) {
 
       {/* Action bar */}
       <div className="flex items-center justify-between gap-3 sticky bottom-4 bg-card/95 backdrop-blur border border-border rounded-2xl p-4">
-        <div className="text-xs text-muted-foreground">
-          {allReady ? "Storyboard ready — review and render when happy."
-            : anyFailed ? "Some scenes failed — regenerate before rendering."
-            : `${scenes.filter(s => s.image_status === "ready").length}/${scenes.length} scenes ready`}
+        <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+          {(() => {
+            const q = scenes.filter(s => s.image_status === "pending").length;
+            const r = scenes.filter(s => s.image_status === "generating").length;
+            const c = scenes.filter(s => s.image_status === "ready").length;
+            const f = scenes.filter(s => s.image_status === "failed").length;
+            return (
+              <>
+                <span><span className="text-foreground font-medium">{c}</span>/{scenes.length} completed</span>
+                {r > 0 && <span className="text-primary">• {r} rendering</span>}
+                {q > 0 && <span>• {q} queued</span>}
+                {f > 0 && <span className="text-destructive">• {f} failed</span>}
+              </>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2">
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
