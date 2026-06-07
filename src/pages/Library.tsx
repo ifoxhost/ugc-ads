@@ -661,6 +661,7 @@ const Library = () => {
   };
 
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
+  const [restitchingIds, setRestitchingIds] = useState<Set<string>>(new Set());
   const [isBatchRegenerating, setIsBatchRegenerating] = useState(false);
 
   /** Estimated duration in seconds from lyric line count */
