@@ -797,11 +797,15 @@ export async function submitKieClip(args: {
     };
   } else if (args.kind === "seedance") {
     const duration = seedanceDuration(args.clip.durationSec);
+    // Seedance 2.0 (fast & pro) only accepts "480p" or "720p" — passing
+    // "1080p" returns HTTP 200 with {code:422,msg:"Invalid resolution"}.
+    const requested = String(args.clip.resolution ?? "720p").toLowerCase();
+    const resolution: "480p" | "720p" = requested === "480p" ? "480p" : "720p";
     const input: Record<string, unknown> = {
       prompt: args.clip.prompt,
       reference_image_urls: [args.clip.imageUrl],
       generate_audio: false, // stitch-lyric-video muxes the real song
-      resolution: "1080p",
+      resolution,
       aspect_ratio: aspect,
       duration,
     };
@@ -810,6 +814,7 @@ export async function submitKieClip(args: {
     if (args.clip.referenceAudioUrl) {
       input.reference_audio_urls = [args.clip.referenceAudioUrl];
     }
+
     body = { model: args.modelId || "bytedance/seedance-2-fast", input };
   } else {
     const duration = klingDuration(args.clip.durationSec);
