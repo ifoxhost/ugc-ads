@@ -7,6 +7,8 @@ project_id = "eqiwbtxomiskpekgrsph"
     verify_jwt = false
   [functions.cleanup-trash]
     verify_jwt = false
+  [functions.cleanup-storyboard-assets]
+    verify_jwt = false
   [functions.cleanup-video-ads]
     verify_jwt = false
   [functions.fix-audio-storage]
