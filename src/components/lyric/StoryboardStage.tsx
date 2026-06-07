@@ -99,6 +99,33 @@ export default function StoryboardStage({ adId, onClose }: Props) {
     }
   };
 
+  const handleRegenAll = async () => {
+    if (!confirm("Re-roll every scene image using the same script and reference inputs?")) return;
+    setRegenAllLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke("regenerate-all-scenes", { body: { adId } });
+      if (error) throw error;
+      toast.success("Re-rolling all scenes…");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to re-roll scenes");
+    } finally {
+      setRegenAllLoading(false);
+    }
+  };
+
+  const handleRender = async () => {
+    setRendering(true);
+    try {
+      const { error } = await supabase.functions.invoke("render-lyric-video", { body: { adId } });
+      if (error) throw error;
+      toast.success("Render started — we'll notify you when it's ready.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to start render");
+    } finally {
+      setRendering(false);
+    }
+  };
+
   const handleRender = async () => {
     setRendering(true);
     try {
