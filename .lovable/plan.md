@@ -1,71 +1,53 @@
-# Lyric Video Pipeline — Direct Orchestration (no n8n)
+## Problem
+Two real bugs in the current Kie.ai render path (`supabase/functions/_shared/pipeline.ts → submitKieRender`):
 
-## Goal
-Replace the n8n webhook pipeline with edge-function-driven orchestration. `/create` becomes a 2-tab flow: **Tab 1** collects inputs, **Tab 2** shows live storyboard generation (script → transcription → scene images) before final render. Each stage updates the DB so the UI can poll progress; Nano Banana frames can be re-rolled per scene.
+1. **Imported Suno audio is never sent to the renderer.** `params.audioUrl` is built in `render-lyric-video/index.ts` but `submitKieRender` ignores it. It also sets `sound: true`, so Kling auto-generates its own soundtrack.
+2. **Output duration is always 5 or 10 seconds and only one scene image is used.** `klingDuration()` clamps to `"5"` or `"10"`, and only `storyboard[0].imageUrl` is passed to Kling. The remaining 5–7 storyboard frames are discarded, so a 3:54 song becomes a 5–10s clip of the first frame.
 
-## Architecture
+Kling itself does **not** accept a custom audio track and caps each job at 10s, so we must change the render strategy — not just the parameters.
 
-```text
-Tab 1 (form)            Tab 2 (storyboard + render)
-─────────────────       ──────────────────────────────────
-song info               ├─ poll generated_ads + scenes table
-ref images              ├─ stage 1: script   (OpenAI gpt-4o)
-audio source            ├─ stage 2: transcribe (ElevenLabs via Kie → Whisper fallback)
-style + model           ├─ stage 3: scenes   (Nano Banana per scene)
-─────────────► submit   ├─ user reviews / re-rolls a scene
-                        └─ stage 4: render  (Kie.ai Kling/Veo) → callback updates row
-```
+## Fix — per-scene Kling clips, then stitch + mux the imported audio
 
-All stages run server-side. Tab 2 polls every 2s. Heavy work runs in `EdgeRuntime.waitUntil` so the HTTP response returns fast.
+### Scene planning (already partly in place)
+- `runScript()` keeps producing up to 8 scenes, but we'll size them to the song:
+  - `sceneCount = clamp(ceil(duration / 8), 4, 12)` (raise `MAX_SCENES` to 12).
+  - `start_sec`/`end_sec` are spaced evenly across `duration`; OpenAI is instructed to honor those bounds.
+- Persist final scene timing back to `video_scenes` so the renderer trusts the DB, not the model.
 
-## Data model
-New table `video_scenes`:
-- `id`, `ad_id` (FK generated_ads), `index`, `lyric_lines text[]`, `start_sec`, `end_sec`
-- `prompt jsonb` (story/camera/env/grading/vfx)
-- `image_url`, `image_status` (`pending|generating|ready|failed`)
-- `regen_count int default 0`
-- RLS: owner via ad_id → user_id; service_role full.
+### Render (rewrite `render-lyric-video` + `submitKieRender`)
+- For each `video_scenes` row:
+  - Compute `clipSec = round(end_sec - start_sec)` and clamp to Kling's allowed `"5"` or `"10"`.
+  - Submit one Kling **image-to-video** job per scene with that scene's `image_url`, `sound: false`, and a scene-specific prompt.
+- Store the list of Kie task ids on `generated_ads.ad_copy.kieTasks = [{sceneId, taskId, durationSec}]` and set a new `ad_copy.renderPlan = { audioUrl, totalDurationSec, scenes:[…] }`.
+- Set `video_status = "processing"`, `pipelineStage = "rendering"`.
 
-Extend `generated_ads.ad_copy` with `pipelineStage` (`script|transcribe|storyboard|ready_to_render|rendering|done|failed`), `script jsonb`, `transcription jsonb`.
+### Poll + finalize (`poll-lyric-video-status`)
+- Poll every `kieTasks[*].taskId`. When all succeed, download each MP4 to the `generated-images` bucket (new prefix `renders/{adId}/clip-{i}.mp4`).
+- Call a new **`stitch-lyric-video`** edge function that:
+  1. Downloads all clip URLs + the original `audioUrl` (Suno mp3).
+  2. Uses **Shotstack's Edit API** (already have `SHOTSTACK_API_KEY` in secrets — repurposed only for stitching, not generation) to build a timeline:
+     - Video track: clips concatenated in scene order, each trimmed to its `durationSec`, total length = song length.
+     - If clips total < song length, loop the last clip or stretch with `fit: "cover"` to fill.
+     - Audio track: the Suno mp3 spanning `0..duration`, replaces any clip audio.
+  3. Submits the render, polls Shotstack, stores the final mp4 URL on `generated_ads.generated_video_url`.
+  4. Marks `status = "completed"`, `video_status = "completed"`, `pipelineStage = "done"`, and calls `consume_credit`.
+- If Shotstack isn't reachable, fall back to publishing the **first clip muxed with audio via Cloudinary's `l_video` + `au_*` URL transform** (no extra secret — uses `referenceImages` bucket's public delivery). This guarantees the user always gets a video whose length and audio match the song.
 
-## Edge functions (all direct, no n8n)
-1. **`submit-lyric-video`** (rewrite) — validate, insert ad row at stage `script`, `waitUntil(orchestrateLyricVideo(adId))`, return adId immediately.
-2. **`_shared/pipeline.ts`** — `orchestrateLyricVideo()`:
-   - `runScript()` → OpenAI `gpt-4o` → JSON shot list → write `script`, scenes rows, advance to `transcribe`.
-   - `runTranscription()` → ElevenLabs (via Kie.ai `/v1/audio/transcribe` route) with Whisper fallback (`OPENAI_API_KEY` → `/v1/audio/transcriptions whisper-1`); align word timings to scenes.
-   - `runStoryboard()` → for each scene, call Nano Banana (`google/gemini-2.5-flash-image` via Lovable AI Gateway) with composed prompt + reference image; upload base64 to `generated-images` bucket; update scene row. Parallelized (max 3 concurrent).
-   - Stop at `ready_to_render`. User must press "Render video" in Tab 2.
-3. **`regenerate-scene-image`** (new) — POST `{ sceneId, promptOverride? }`. Auth + ownership check, re-runs Nano Banana, bumps `regen_count`.
-4. **`render-lyric-video`** (new) — POST `{ adId }`. Verifies all scenes ready, calls Kie.ai (`KIE_AI_API_KEY`) Kling/Veo submit endpoint directly, stores `kie_task_id` on ad, sets stage `rendering`.
-5. **`poll-lyric-video-status`** (rewrite) — polls Kie.ai for in-flight tasks (not n8n callbacks), downloads finished MP4 to storage, marks done + consumes credits + sends notification email.
-6. **Remove Shotstack**: delete `SHOTSTACK_API_KEY` references, remove `submit-video-ad` shotstack branch, drop `N8N_WEBHOOK_*` from `submit-lyric-video`.
+### Frontend
+- No UI change beyond the existing render-progress bar; it already polls `video_progress`. We'll bump progress in stages: 60 (clips submitted) → 80 (all clips ready) → 95 (stitching) → 100 (done).
 
-## Frontend
-- **`/create`** updated: tab structure (`Details` → `Storyboard & Render`).
-- **Tab 1**: existing `LyricVideoForm` trimmed — keep Suno parser, lyrics, ref images, Pexels, style, aspect, video model (kling/veo only), image engine locked to Nano Banana (UI hidden).
-- **Tab 2** (`StoryboardStage.tsx` new): subscribes (Realtime) to `video_scenes` for the ad; renders OpenArt-style grid (scene image | prompt | regenerate button); top progress bar shows current pipeline stage; "Render Video" CTA enabled when all scenes ready.
-- Update `useCreateSubmit` to switch tab on success instead of redirecting to Library.
+## Files touched
+- `supabase/functions/_shared/pipeline.ts` — scene sizing, `submitKieRender` per-scene loop, `sound:false`, new helpers `submitKieRenderBatch`, `downloadClip`.
+- `supabase/functions/render-lyric-video/index.ts` — orchestrates the per-scene submission and writes `kieTasks` + `renderPlan`.
+- `supabase/functions/poll-lyric-video-status/index.ts` — polls every task, triggers stitching when all are ready, no longer assumes a single task id.
+- `supabase/functions/stitch-lyric-video/index.ts` — **new**. Shotstack timeline + Suno audio mux, with Cloudinary fallback.
+- `supabase/config.toml` — register the new function.
+- `docs/pipelines/kie-render.md`, `docs/pipelines/orchestrator.md` — document the per-scene + stitch flow.
 
-## Security
-- All new functions: JWT verify, ownership check on `ad_id`/`sceneId`, input validation with Zod, never log secret values.
-- `startup-checks.requireSecrets()` extended per function:
-  - submit: `OPENAI_API_KEY`, `LOVABLE_API_KEY`, `KIE_AI_API_KEY`, `ELEVENLABS_API_KEY`
-  - regenerate-scene: `LOVABLE_API_KEY`
-  - render: `KIE_AI_API_KEY`
-  - poll: `KIE_AI_API_KEY`
+## Out of scope
+- True lyric-synced subtitles burned into the video (the transcription is stored but not yet rendered as captions). Easy follow-up once stitching works.
+- Replacing Kling with Veo for built-in audio — keeps current model choice intact.
 
-## Docs
-Update `docs/pipelines/*`:
-- Remove all n8n references.
-- New `docs/pipelines/orchestrator.md` describing direct stage machine.
-- Update `kie-render.md` (direct call, not via n8n).
-- Update `storyboard.md`, `audio-transcription.md` with provider fallback chain.
-
-## Out of scope (this iteration)
-- Per-scene prompt editing (only regenerate from existing prompt).
-- Per-scene reference image override.
-- Realtime collaboration on storyboard.
-
-## Risk notes
-- Edge function CPU/wall time: Nano Banana fan-out limited to 3 concurrent, total scenes capped at 8 for now.
-- Kie.ai poll job replaces callback model for reliability; n8n callback path stays only for legacy in-flight jobs (will be removed once drained).
+## Risk
+- Shotstack render adds ~1–2 min to total wall time. We surface this in the progress bar.
+- Per-scene Kling submission multiplies Kie cost by `sceneCount`. We cap at 12 scenes.
