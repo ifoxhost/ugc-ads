@@ -208,6 +208,24 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
       ),
     );
 
+  const toggleSceneLock = async (scene: Scene) => {
+    const nextLocked = !scene.locked;
+    try {
+      const { error } = await supabase
+        .from("video_scenes")
+        .update({ locked: nextLocked })
+        .eq("id", scene.id);
+      if (error) throw error;
+      updateScene(scene.id, { locked: nextLocked });
+      toast({
+        title: nextLocked ? `Scene ${scene.index + 1} locked` : `Scene ${scene.index + 1} unlocked`,
+        description: nextLocked ? "Excluded from bulk generate and stitching." : "Included in workflows.",
+      });
+    } catch (e: any) {
+      toast({ title: "Lock toggle failed", description: e?.message ?? String(e), variant: "destructive" });
+    }
+  };
+
   const saveScene = async (scene: Scene) => {
     setSavingId(scene.id);
     try {
@@ -218,6 +236,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
           start_sec: Number(scene.start_sec) || 0,
           end_sec: Number(scene.end_sec) || 0,
           image_url: scene.image_url,
+          locked: scene.locked,
         })
         .eq("id", scene.id);
       if (error) throw error;
