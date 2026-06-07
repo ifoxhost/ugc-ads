@@ -446,66 +446,53 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
     toast({ title: "Scene Split", description: "Scene split successfully." });
   };
 
-  // Regenerate Image
+  // Regenerate Image — runs Nano Banana for this single scene and swaps the
+  // displayed reference frame as soon as the new image_url comes back.
   const handleRegenerateImage = async (clipId: string) => {
     const target = clips.find(c => c.id === clipId);
     if (!target) return;
 
     updateClip(clipId, { status: "processing", progress: 20 });
-    
+
     try {
-      console.log(`[Pexels Manual Search Editor] Searching for image: "${target.prompt}"`);
-      const { data, error } = await supabase.functions.invoke("pexels-search", {
-        body: {
-          query: target.prompt || "cinematic background",
-          perPage: 5
-        }
+      const { data, error } = await supabase.functions.invoke("regenerate-scene-image", {
+        body: { sceneId: clipId },
       });
-      
       if (error) throw error;
-      
-      const results = data?.results || [];
-      if (results.length > 0) {
-        const randomIndex = Math.floor(Math.random() * results.length);
-        const newImg = results[randomIndex].url;
-        console.log(`[Pexels Manual Search Editor] Found image: ${newImg}`);
-        
-        updateClip(clipId, {
-          status: "idle",
-          active_image_id: `img_${Math.random().toString(36).substring(2, 10)}`,
-          start_reference_image: newImg
-        });
-        
-        // Save new version snapshot
-        const verSnapshot = {
-          prompt: target.prompt,
-          image_url: newImg,
-          video_url: target.videoUrl,
-          camera_setting: target.camera_setting,
-          motion_setting: target.motion_setting,
-          environment_setting: target.environment_setting,
-          lighting_setting: target.lighting_setting,
-          character_setting: target.character_setting,
-          start_reference_image: newImg,
-          end_reference_image: target.end_reference_image
-        };
-        
-        saveSceneVersion(clipId, "image", verSnapshot);
-        toast({ title: "Image Generated", description: `New visual frame generated for Scene ${target.scene_number}.` });
-      } else {
-        throw new Error("No images found on Pexels");
-      }
+      const newImg = (data as any)?.url as string | undefined;
+      if (!newImg) throw new Error("Regeneration did not return an image URL");
+
+      // Cache-bust so the <img> actually re-fetches when the URL is unchanged.
+      const displayUrl = `${newImg}${newImg.includes("?") ? "&" : "?"}t=${Date.now()}`;
+
+      updateClip(clipId, {
+        status: "idle",
+        active_image_id: `img_${Math.random().toString(36).substring(2, 10)}`,
+        start_reference_image: displayUrl,
+        end_reference_image: displayUrl,
+      });
+
+      saveSceneVersion(clipId, "image", {
+        prompt: target.prompt,
+        image_url: newImg,
+        video_url: target.videoUrl,
+        camera_setting: target.camera_setting,
+        motion_setting: target.motion_setting,
+        environment_setting: target.environment_setting,
+        lighting_setting: target.lighting_setting,
+        character_setting: target.character_setting,
+        start_reference_image: newImg,
+        end_reference_image: newImg,
+      });
+      toast({ title: "Image Regenerated", description: `New frame generated for Scene ${target.scene_number}.` });
     } catch (err) {
-      console.error("Image generation error in editor:", err);
+      console.error("[StoryboardEditor] regenerate image error:", err);
+      updateClip(clipId, { status: "idle" });
       toast({
         title: "Regeneration failed",
-        description: err instanceof Error ? err.message : "Failed to search stock photos.",
-        variant: "destructive"
+        description: err instanceof Error ? err.message : "Failed to regenerate scene image.",
+        variant: "destructive",
       });
-      // Fallback
-      const randomId = Math.floor(Math.random() * 100) + 50;
-      const fallbackImg = `https://images.unsplash.com/photo-${1500000000000 + randomId}?auto=format&fit=crop&w=1920&q=80`;
-      updateClip(clipId, { status: "idle", start_reference_image: fallbackImg });
     }
   };
 
