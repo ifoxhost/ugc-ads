@@ -14,6 +14,10 @@ import {
   sliceUrl,
   type UploadedAudio,
 } from "../_shared/cloudinary.ts";
+import {
+  validateSeedanceAudioRefs,
+  SeedanceAudioRefError,
+} from "../_shared/pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
