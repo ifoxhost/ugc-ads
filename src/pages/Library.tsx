@@ -163,6 +163,7 @@ interface GeneratedAd {
   completed_at: string | null;
   email: string;
   prompt_used: string | null;
+  video_duration?: number | null;
 }
 
 /** Returns true if this is a SongDoe music video record */
