@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Sparkles, AlertCircle, CheckCircle2, PlayCircle } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles, AlertCircle, CheckCircle2, PlayCircle, Info, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
 
 type SceneRow = {
   id: string;
@@ -16,6 +18,9 @@ type SceneRow = {
   image_status: "pending" | "generating" | "ready" | "failed";
   regen_count: number;
   error_message: string | null;
+  failed_step: string | null;
+  updated_at: string;
+  created_at: string;
 };
 
 type AdRow = {
@@ -46,7 +51,9 @@ export default function StoryboardStage({ adId, onClose }: Props) {
   const [scenes, setScenes] = useState<SceneRow[]>([]);
   const [regenLoading, setRegenLoading] = useState<string | null>(null);
   const [regenAllLoading, setRegenAllLoading] = useState(false);
+  const [retryFailedLoading, setRetryFailedLoading] = useState(false);
   const [rendering, setRendering] = useState(false);
+  const [detailsScene, setDetailsScene] = useState<SceneRow | null>(null);
 
   // Initial load + realtime subscriptions
   useEffect(() => {
@@ -116,6 +123,22 @@ export default function StoryboardStage({ adId, onClose }: Props) {
       setRegenAllLoading(false);
     }
   };
+
+  const handleRetryAllFailed = async () => {
+    setRetryFailedLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("retry-failed-scenes", { body: { adId } });
+      if (error) throw error;
+      const n = (data as any)?.count ?? 0;
+      if (n === 0) toast.info("No failed scenes to retry.");
+      else toast.success(`Re-queued ${n} failed scene${n === 1 ? "" : "s"}…`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to retry scenes");
+    } finally {
+      setRetryFailedLoading(false);
+    }
+  };
+
 
   const handleRender = async () => {
     setRendering(true);
@@ -197,28 +220,41 @@ export default function StoryboardStage({ adId, onClose }: Props) {
                   <p className="text-[11px] text-muted-foreground italic line-clamp-2">"{s.lyric_lines.join(" / ")}"</p>
                 )}
                 {s.error_message && (
-                  <p className="text-[11px] text-destructive">{s.error_message}</p>
+                  <p className="text-[11px] text-destructive line-clamp-2">{s.error_message}</p>
                 )}
-                <Button
-                  size="sm"
-                  variant={s.image_status === "failed" ? "destructive" : "outline"}
-                  className="w-full"
-                  disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
-                  onClick={() => handleRegen(s.id)}>
-                  {regenLoading === s.id || s.image_status === "generating" ? (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3 h-3 mr-1" />
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant={s.image_status === "failed" ? "destructive" : "outline"}
+                    className="flex-1"
+                    disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
+                    onClick={() => handleRegen(s.id)}>
+                    {regenLoading === s.id || s.image_status === "generating" ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                    )}
+                    {s.image_status === "failed"
+                      ? "Retry failed"
+                      : <>Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}</>}
+                  </Button>
+                  {s.image_status === "failed" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="px-2"
+                      onClick={() => setDetailsScene(s)}
+                      title="View error details">
+                      <Info className="w-3 h-3" />
+                    </Button>
                   )}
-                  {s.image_status === "failed"
-                    ? "Retry failed"
-                    : <>Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}</>}
-                </Button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
 
       {/* Action bar */}
       <div className="flex items-center justify-between gap-3 sticky bottom-4 bg-card/95 backdrop-blur border border-border rounded-2xl p-4">
@@ -238,8 +274,21 @@ export default function StoryboardStage({ adId, onClose }: Props) {
             );
           })()}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
+          {scenes.some(s => s.image_status === "failed") && (
+            <Button
+              variant="destructive" size="sm"
+              disabled={retryFailedLoading || showRegenAllBusy || stage === "rendering"}
+              onClick={handleRetryAllFailed}>
+              {retryFailedLoading ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <RotateCcw className="w-4 h-4 mr-1" />
+              )}
+              Retry all failed
+            </Button>
+          )}
           <Button
             variant="outline" size="sm"
             disabled={showRegenAllBusy || scenes.length === 0 || stage === "rendering"}
@@ -271,6 +320,75 @@ export default function StoryboardStage({ adId, onClose }: Props) {
           )}
         </div>
       </div>
+
+      {/* Failed-scene details drawer */}
+      <Sheet open={!!detailsScene} onOpenChange={(o) => !o && setDetailsScene(null)}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          {detailsScene && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-destructive" />
+                  Scene {detailsScene.index + 1} — failure details
+                </SheetTitle>
+                <SheetDescription>
+                  {Math.round(detailsScene.start_sec)}–{Math.round(detailsScene.end_sec)}s
+                </SheetDescription>
+              </SheetHeader>
+              <div className="space-y-4 mt-4 text-sm">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="destructive">Failed</Badge>
+                  {detailsScene.failed_step && (
+                    <Badge variant="outline">Step: {detailsScene.failed_step}</Badge>
+                  )}
+                  {detailsScene.regen_count > 0 && (
+                    <Badge variant="outline">Attempts: {detailsScene.regen_count}</Badge>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground uppercase">Last error</div>
+                  <pre className="text-xs bg-muted rounded-md p-3 whitespace-pre-wrap break-words">
+{detailsScene.error_message ?? "No error message captured."}
+                  </pre>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Created</div>
+                    <div>{new Date(detailsScene.created_at).toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Last updated</div>
+                    <div>{new Date(detailsScene.updated_at).toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {detailsScene.prompt?.story && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-muted-foreground uppercase">Scene prompt</div>
+                    <p className="text-xs text-foreground/90">{detailsScene.prompt.story}</p>
+                  </div>
+                )}
+
+                <div className="pt-2 flex gap-2">
+                  <Button
+                    size="sm" variant="destructive" className="flex-1"
+                    disabled={regenLoading === detailsScene.id}
+                    onClick={async () => {
+                      const id = detailsScene.id;
+                      setDetailsScene(null);
+                      await handleRegen(id);
+                    }}>
+                    <RefreshCw className="w-3 h-3 mr-1" /> Retry this scene
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
+

@@ -116,6 +116,54 @@ export type Database = {
         }
         Relationships: []
       }
+      cleanup_runs: {
+        Row: {
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          img_ttl_days: number | null
+          imgs_deleted: number
+          imgs_scanned: number
+          live_imgs: number
+          ref_ttl_days: number | null
+          refs_deleted: number
+          refs_scanned: number
+          started_at: string
+          success: boolean
+          triggered_by: string
+        }
+        Insert: {
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          img_ttl_days?: number | null
+          imgs_deleted?: number
+          imgs_scanned?: number
+          live_imgs?: number
+          ref_ttl_days?: number | null
+          refs_deleted?: number
+          refs_scanned?: number
+          started_at?: string
+          success?: boolean
+          triggered_by?: string
+        }
+        Update: {
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          img_ttl_days?: number | null
+          imgs_deleted?: number
+          imgs_scanned?: number
+          live_imgs?: number
+          ref_ttl_days?: number | null
+          refs_deleted?: number
+          refs_scanned?: number
+          started_at?: string
+          success?: boolean
+          triggered_by?: string
+        }
+        Relationships: []
+      }
       generated_ads: {
         Row: {
           ad_copy: Json | null
@@ -589,6 +637,7 @@ export type Database = {
           created_at: string
           end_sec: number
           error_message: string | null
+          failed_step: string | null
           id: string
           image_status: string
           image_url: string | null
@@ -605,6 +654,7 @@ export type Database = {
           created_at?: string
           end_sec?: number
           error_message?: string | null
+          failed_step?: string | null
           id?: string
           image_status?: string
           image_url?: string | null
@@ -621,6 +671,7 @@ export type Database = {
           created_at?: string
           end_sec?: number
           error_message?: string | null
+          failed_step?: string | null
           id?: string
           image_status?: string
           image_url?: string | null
