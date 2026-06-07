@@ -37,11 +37,15 @@ serve(async (req) => {
       return new Response(JSON.stringify({error:"Not found"}),{status:404,headers:{...corsHeaders,"Content-Type":"application/json"}});
     }
 
-    const { data: scenes } = await sb.from("video_scenes")
-      .select("id, index, image_url, image_status, prompt, start_sec, end_sec")
+    const { data: scenesRaw } = await sb.from("video_scenes")
+      .select("id, index, image_url, image_status, prompt, start_sec, end_sec, locked")
       .eq("ad_id", adId).order("index", { ascending: true });
-    if (!scenes || scenes.length === 0) {
+    if (!scenesRaw || scenesRaw.length === 0) {
       return new Response(JSON.stringify({error:"No scenes"}),{status:400,headers:{...corsHeaders,"Content-Type":"application/json"}});
+    }
+    const scenes = scenesRaw.filter((s: any) => !s.locked);
+    if (scenes.length === 0) {
+      return new Response(JSON.stringify({error:"All scenes are locked"}),{status:400,headers:{...corsHeaders,"Content-Type":"application/json"}});
     }
     if (scenes.some((s) => s.image_status !== "ready" || !s.image_url)) {
       return new Response(JSON.stringify({error:"Storyboard not complete"}),{status:400,headers:{...corsHeaders,"Content-Type":"application/json"}});

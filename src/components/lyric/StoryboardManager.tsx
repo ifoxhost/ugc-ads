@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Loader2, RefreshCw, Sparkles, Film, Music2,
   ImageIcon, AlertTriangle, Check, Wand2, Save, Download, Play, Pause, Eye,
+  Lock, Unlock,
 } from "lucide-react";
 
 interface Props {
@@ -35,6 +36,7 @@ type Scene = {
   prompt: ScenePromptFields & Record<string, unknown>;
   error_message?: string | null;
   regen_count?: number;
+  locked: boolean;
 };
 
 const TERMINAL_VIDEO_STATUSES = new Set(["completed", "failed"]);
@@ -124,13 +126,14 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [ad.id]);
 
+  const unlockedScenes = useMemo(() => scenes.filter((s) => !s.locked), [scenes]);
   const missingScenes = useMemo(
-    () => scenes.filter((s) => s.image_status !== "ready" || !s.image_url),
-    [scenes],
+    () => unlockedScenes.filter((s) => s.image_status !== "ready" || !s.image_url),
+    [unlockedScenes],
   );
-  const readyCount = scenes.length - missingScenes.length;
+  const readyCount = unlockedScenes.length - missingScenes.length;
 
-  const allReady = scenes.length > 0 && missingScenes.length === 0;
+  const allReady = unlockedScenes.length > 0 && missingScenes.length === 0;
   const isRendering = videoStatus === "processing" || renderBusy;
 
   // ── Mutations ────────────────────────────────────────────────────────────
@@ -205,6 +208,24 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
       ),
     );
 
+  const toggleSceneLock = async (scene: Scene) => {
+    const nextLocked = !scene.locked;
+    try {
+      const { error } = await supabase
+        .from("video_scenes")
+        .update({ locked: nextLocked })
+        .eq("id", scene.id);
+      if (error) throw error;
+      updateScene(scene.id, { locked: nextLocked });
+      toast({
+        title: nextLocked ? `Scene ${scene.index + 1} locked` : `Scene ${scene.index + 1} unlocked`,
+        description: nextLocked ? "Excluded from bulk generate and stitching." : "Included in workflows.",
+      });
+    } catch (e: any) {
+      toast({ title: "Lock toggle failed", description: e?.message ?? String(e), variant: "destructive" });
+    }
+  };
+
   const saveScene = async (scene: Scene) => {
     setSavingId(scene.id);
     try {
@@ -215,6 +236,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
           start_sec: Number(scene.start_sec) || 0,
           end_sec: Number(scene.end_sec) || 0,
           image_url: scene.image_url,
+          locked: scene.locked,
         })
         .eq("id", scene.id);
       if (error) throw error;
@@ -292,7 +314,10 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                 <span className="font-semibold text-foreground">{songTitle}</span>
                 {artist ? <> — {artist}</> : null}
                 <span className="mx-2">·</span>
-                {readyCount}/{scenes.length} scenes ready
+                {readyCount}/{unlockedScenes.length} scenes ready
+                {scenes.length !== unlockedScenes.length && (
+                  <span className="text-muted-foreground"> ({scenes.length - unlockedScenes.length} locked)</span>
+                )}
               </p>
             </div>
           </div>
@@ -423,7 +448,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                 );
 
               return (
-                <Card key={scene.id} className="overflow-hidden">
+                <Card key={scene.id} className={`overflow-hidden ${scene.locked ? "border-amber-500/40 bg-amber-500/5" : ""}`}>
                   <CardContent className="p-4 grid md:grid-cols-[260px_1fr] gap-4">
                     {/* Image */}
                     <div className="space-y-2">
@@ -451,7 +476,22 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                         <span className="text-xs font-semibold text-primary">
                           SCENE {scene.index + 1}
                         </span>
-                        {statusBadge}
+                        <div className="flex items-center gap-2">
+                          {statusBadge}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            title={scene.locked ? "Unlock scene" : "Lock scene"}
+                            onClick={() => toggleSceneLock(scene)}
+                          >
+                            {scene.locked ? (
+                              <Lock className="h-3.5 w-3.5 text-amber-500" />
+                            ) : (
+                              <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
                       <Button
                         size="sm"
@@ -576,7 +616,7 @@ function TimelinePreview({
   const [duration, setDuration] = useState(0);
 
   const orderedReady = useMemo(
-    () => scenes.filter((s) => s.image_url).sort((a, b) => a.index - b.index),
+    () => scenes.filter((s) => !s.locked && s.image_url).sort((a, b) => a.index - b.index),
     [scenes],
   );
 
