@@ -248,6 +248,9 @@ const Library = () => {
   const [sortBy, setSortBy] = useState<string>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [dateFilter, setDateFilter] = useState("all");
+  const [expiryFilter, setExpiryFilter] = useState("all");
+  const [durationFilter, setDurationFilter] = useState("all");
+  const [isBulkRegenerating, setIsBulkRegenerating] = useState(false);
   
   // Get unique emails for admin filter
   const uniqueEmails = useMemo(() => {
