@@ -8,7 +8,7 @@ import {
   Download, Loader2, Trash2, AlertCircle, Image, Video, Play, X, 
   LayoutGrid, Mail, Copy, Check, RefreshCw, Search, Filter, 
   CheckSquare, Square, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Undo2,
-  User, Users, Music2, Share2, RotateCcw, Clock, Scissors, Film
+  User, Users, Music2, Share2, RotateCcw, Clock, Scissors, Film, Eye, Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
