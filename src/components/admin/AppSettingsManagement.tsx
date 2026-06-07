@@ -4,8 +4,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, PlayCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Save, PlayCircle, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+
+type CleanupRun = {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  success: boolean;
+  ref_ttl_days: number | null;
+  img_ttl_days: number | null;
+  refs_scanned: number;
+  imgs_scanned: number;
+  refs_deleted: number;
+  imgs_deleted: number;
+  live_imgs: number;
+  error_message: string | null;
+  triggered_by: string;
+};
 
 type SettingRow = { key: string; value: any; description: string | null; updated_at: string };
 
