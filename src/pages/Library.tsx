@@ -2272,6 +2272,17 @@ const Library = () => {
 
               {/* Quick Actions */}
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                {isLyric && (
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="h-8 w-8"
+                    title="Open storyboard"
+                    onClick={(e) => { e.stopPropagation(); setEditingStoryboardAd(ad); }}
+                  >
+                    <Film className="h-4 w-4" />
+                  </Button>
+                )}
                 {isLyric && isCompleted && (
                   <Button
                     size="icon"
