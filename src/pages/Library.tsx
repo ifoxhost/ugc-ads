@@ -764,6 +764,8 @@ const Library = () => {
     } catch { return false; }
   };
 
+  const [copyFallbacks, setCopyFallbacks] = useState<Record<string, { value: string; label: string }>>({});
+
   const copySliceField = useCallback(async (value: string, label: string, key: string) => {
     const ok = await writeToClipboard(value);
     if (ok) {
@@ -772,12 +774,28 @@ const Library = () => {
       });
       setCopiedSliceKey(key);
       setTimeout(() => setCopiedSliceKey((prev) => (prev === key ? null : prev)), 2000);
+      // Clear any prior fallback for this key on success
+      setCopyFallbacks((prev) => {
+        if (!(key in prev)) return prev;
+        const { [key]: _omit, ...rest } = prev;
+        return rest;
+      });
     } else {
       sonner.error("Copy failed", {
-        description: "Clipboard access is blocked. Select the text manually and press Ctrl/Cmd+C.",
+        description: "Clipboard access is blocked. Select the text below and press Ctrl/Cmd+C.",
       });
+      setCopyFallbacks((prev) => ({ ...prev, [key]: { value, label } }));
     }
   }, []);
+
+  const dismissCopyFallback = useCallback((key: string) => {
+    setCopyFallbacks((prev) => {
+      if (!(key in prev)) return prev;
+      const { [key]: _omit, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
 
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const [restitchingIds, setRestitchingIds] = useState<Set<string>>(new Set());
