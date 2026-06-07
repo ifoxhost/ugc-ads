@@ -522,7 +522,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                         <p className="text-[11px] text-destructive">{scene.error_message}</p>
                       )}
 
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -536,6 +536,15 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                             <Save className="h-3.5 w-3.5" />
                           )}
                           Save edits
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => saveAndRegenScene(scene)}
+                          disabled={savingId === scene.id || busy || scene.image_status === "generating"}
+                        >
+                          <Wand2 className="h-3.5 w-3.5" />
+                          Save & regenerate
                         </Button>
                       </div>
                     </div>
