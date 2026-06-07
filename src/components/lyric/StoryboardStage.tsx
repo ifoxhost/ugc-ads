@@ -200,15 +200,19 @@ export default function StoryboardStage({ adId, onClose }: Props) {
                   <p className="text-[11px] text-destructive">{s.error_message}</p>
                 )}
                 <Button
-                  size="sm" variant="outline" className="w-full"
-                  disabled={regenLoading === s.id || s.image_status === "generating" || regenAllLoading}
+                  size="sm"
+                  variant={s.image_status === "failed" ? "destructive" : "outline"}
+                  className="w-full"
+                  disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
                   onClick={() => handleRegen(s.id)}>
                   {regenLoading === s.id || s.image_status === "generating" ? (
                     <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                   ) : (
                     <RefreshCw className="w-3 h-3 mr-1" />
                   )}
-                  Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}
+                  {s.image_status === "failed"
+                    ? "Retry failed"
+                    : <>Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}</>}
                 </Button>
               </div>
             </div>
