@@ -28,7 +28,16 @@ interface SceneSpec {
   };
 }
 
-const MAX_SCENES = 8;
+const MAX_SCENES = 12;
+const MIN_SCENES = 4;
+// Kling clamps clip length to 5s or 10s. Target ~8s per scene so a 4-min song
+// produces ~30 clips — but we cap at MAX_SCENES and let stitching loop/extend
+// the last clip to fill any remaining audio.
+const TARGET_SECONDS_PER_SCENE = 8;
+export function planSceneCount(durationSec: number): number {
+  const n = Math.ceil((durationSec || 60) / TARGET_SECONDS_PER_SCENE);
+  return Math.max(MIN_SCENES, Math.min(MAX_SCENES, n));
+}
 const NANO_BANANA_CONCURRENCY = 3;
 const OPENAI_API = "https://api.openai.com/v1";
 const LOVABLE_AI_API = "https://ai.gateway.lovable.dev/v1";
