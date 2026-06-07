@@ -15,6 +15,32 @@ import { useToast } from "@/hooks/use-toast";
 import { toast as sonner } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StoryboardManager from "@/components/lyric/StoryboardManager";
+import { parseISO, differenceInDays, differenceInHours } from "date-fns";
+
+// Format a duration in seconds → "m:ss" / "h:mm:ss" (mirrors OutputGallery card).
+const formatVideoDuration = (seconds: number | null | undefined): string | null => {
+  if (!seconds || seconds <= 0) return null;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hours > 0) return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  return `${minutes}:${secs.toString().padStart(2, "0")}`;
+};
+
+// 14-day retention countdown (mirrors OutputGallery card).
+const getVideoExpiryInfo = (completedAt: string | null | undefined) => {
+  if (!completedAt) return null;
+  try {
+    const completedDate = parseISO(completedAt);
+    const expiryDate = new Date(completedDate);
+    expiryDate.setDate(expiryDate.getDate() + 14);
+    const now = new Date();
+    const daysLeft = differenceInDays(expiryDate, now);
+    const hoursLeft = differenceInHours(expiryDate, now) % 24;
+    if (daysLeft < 0) return { daysLeft: 0, hoursLeft: 0, isExpiringSoon: true };
+    return { daysLeft, hoursLeft, isExpiringSoon: daysLeft <= 3 };
+  } catch { return null; }
+};
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
