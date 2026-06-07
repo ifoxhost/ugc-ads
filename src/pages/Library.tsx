@@ -1295,6 +1295,20 @@ const Library = () => {
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              onClick={handleBulkRegenerateSelected}
+              disabled={isBulkRegenerating || isDownloadingBatch || isDeletingBatch}
+              title="Regenerate selected AI Music Videos"
+            >
+              {isBulkRegenerating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4 mr-2" />
+              )}
+              Regenerate
+            </Button>
+            <Button
+              size="sm"
               variant="ghost"
               onClick={() => setSelectedIds(new Set())}
             >
