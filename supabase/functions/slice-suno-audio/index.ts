@@ -91,11 +91,39 @@ serve(async (req) => {
       };
     });
 
+    // 2b) Validate each slice against Seedance limits (max 3 / 15s).
+    //     We store per-scene violations so the UI can surface them.
+    const sliceErrors: Array<{ sceneId: string; index: number; reason: string; durationSec: number }> = [];
+    for (const sl of slices) {
+      try {
+        validateSeedanceAudioRefs([sl.url], [sl.durationSec]);
+      } catch (e) {
+        if (e instanceof SeedanceAudioRefError) {
+          for (const d of e.details) {
+            sliceErrors.push({
+              sceneId: sl.sceneId,
+              index: sl.index,
+              reason: d.reason,
+              durationSec: sl.durationSec,
+            });
+          }
+        } else {
+          sliceErrors.push({
+            sceneId: sl.sceneId,
+            index: sl.index,
+            reason: (e as Error).message,
+            durationSec: sl.durationSec,
+          });
+        }
+      }
+    }
+
     // 3) Persist slices + cached Cloudinary metadata.
     const newCopy = {
       ...adCopy,
       cloudinaryAudio: uploaded,
       sceneAudioSlices: slices,
+      sceneAudioSliceErrors: sliceErrors,
       sceneAudioSlicesGeneratedAt: new Date().toISOString(),
     };
     const { error: upErr } = await sb.from("generated_ads")
@@ -105,9 +133,11 @@ serve(async (req) => {
     return json({
       success: true,
       count: slices.length,
+      errorCount: sliceErrors.length,
       cloudinaryPublicId: uploaded.publicId,
       sourceDurationSec: uploaded.durationSec,
       slices,
+      errors: sliceErrors,
     });
   } catch (e) {
     console.error("[slice-suno-audio] error:", e);
