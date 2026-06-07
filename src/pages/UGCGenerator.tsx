@@ -895,20 +895,25 @@ const UGCGenerator = () => {
     return order.indexOf(stage) < order.indexOf(currentStage || "");
   };
 
+  const isFailedAd = (ad: any) =>
+    ad.status === "video_failed" ||
+    ad.status === "failed" ||
+    ad.video_status === "failed";
+
   const inProgressAds = generatedAds.filter((ad) =>
-    ad.status === "processing" || ad.video_status === "queued" || ad.video_status === "processing"
+    !isFailedAd(ad) && (ad.status === "processing" || ad.video_status === "queued" || ad.video_status === "processing")
   );
   const activeRenders = generatedAds.filter((ad) =>
-    ad.status === "processing" ||
-    ad.status === "video_failed" ||
-    ad.video_status === "queued" ||
-    ad.video_status === "processing" ||
-    ad.video_status === "fetching" ||
-    ad.video_status === "rendering" ||
-    ad.video_status === "saving" ||
-    ad.video_status === "failed"
+    !isFailedAd(ad) && (
+      ad.status === "processing" ||
+      ad.video_status === "queued" ||
+      ad.video_status === "processing" ||
+      ad.video_status === "fetching" ||
+      ad.video_status === "rendering" ||
+      ad.video_status === "saving"
+    )
   );
-  const completedAds = generatedAds.filter((ad) => !inProgressAds.includes(ad));
+  const completedAds = generatedAds.filter((ad) => !inProgressAds.includes(ad) && !isFailedAd(ad));
 
   if (editingStoryboardAd) {
     return (
