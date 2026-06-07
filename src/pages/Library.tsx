@@ -735,6 +735,51 @@ const Library = () => {
     }
   };
 
+  const handleRestitch = async (ad: GeneratedAd) => {
+    setRestitchingIds(prev => new Set(prev).add(ad.id));
+    try {
+      const res = await supabase.functions.invoke("stitch-lyric-video", {
+        body: { adId: ad.id },
+      });
+      if (res.error) throw res.error;
+      toast({
+        title: "Re-stitch started",
+        description: "fal.ai retries will run, falling back to Shotstack if needed.",
+      });
+      fetchAds();
+    } catch (err: any) {
+      console.error("Re-stitch error:", err);
+      toast({
+        title: "Re-stitch failed",
+        description: err?.message ?? "Could not start re-stitch.",
+        variant: "destructive",
+      });
+    } finally {
+      setRestitchingIds(prev => { const s = new Set(prev); s.delete(ad.id); return s; });
+    }
+  };
+
+  const downloadStitchAudit = (ad: GeneratedAd) => {
+    const audit = ad.ad_copy?.stitchAudit ?? null;
+    const validation = ad.ad_copy?.stitchValidation ?? null;
+    const payload = {
+      adId: ad.id,
+      exportedAt: new Date().toISOString(),
+      finalStitcher: ad.ad_copy?.stitchedBy ?? validation?.stitcher ?? null,
+      stitchValidation: validation,
+      stitchAudit: audit,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `stitch-audit-${ad.id.slice(0, 8)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const getStyleLabel = (styleId: string) => STYLE_LABELS[styleId] || styleId;
 
   const toggleSelectAll = () => {
