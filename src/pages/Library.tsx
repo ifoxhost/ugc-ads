@@ -1543,6 +1543,137 @@ const Library = () => {
               </div>
             )}
 
+            {/* Seedance audio slices (Cloudinary) */}
+            {mediaViewer.ad && isLyricVideo(mediaViewer.ad) && (
+              (() => {
+                const ac = mediaViewer.ad!.ad_copy;
+                const slices = ac?.sceneAudioSlices ?? [];
+                const errors = ac?.sceneAudioSliceErrors ?? [];
+                const hasAny = slices.length > 0 || errors.length > 0 || !!ac?.cloudinaryAudio;
+                if (!hasAny) return null;
+                const errorBySceneId = new Map<string, typeof errors>();
+                errors.forEach((e) => {
+                  const list = errorBySceneId.get(e.sceneId) ?? [];
+                  list.push(e);
+                  errorBySceneId.set(e.sceneId, list);
+                });
+                const adId = mediaViewer.ad!.id;
+                const reslicing = reslicingIds.has(adId);
+                return (
+                  <div className="p-4 border-t space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-lg flex items-center gap-2">
+                        <Scissors className="h-4 w-4" />
+                        Seedance audio slices
+                      </h3>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={reslicing}
+                        onClick={() => handleReslice(mediaViewer.ad!)}
+                      >
+                        {reslicing ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                        )}
+                        Re-slice audio
+                      </Button>
+                    </div>
+
+                    {ac?.sceneAudioSlicesGeneratedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Generated {new Date(ac.sceneAudioSlicesGeneratedAt).toLocaleString()}
+                        {ac.cloudinaryAudio?.publicId && (
+                          <> • source <span className="font-mono">{ac.cloudinaryAudio.publicId}</span> ({Number(ac.cloudinaryAudio.durationSec ?? 0).toFixed(1)}s)</>
+                        )}
+                      </p>
+                    )}
+
+                    {errors.length > 0 && (
+                      <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 space-y-1">
+                        <div className="text-sm font-medium text-destructive flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          {errors.length} slice {errors.length === 1 ? "violation" : "violations"} (max 3 files / 15s each)
+                        </div>
+                        <ul className="text-xs space-y-1 pl-6 list-disc">
+                          {errors.map((e, i) => (
+                            <li key={i} className="font-mono">
+                              Scene {Number(e.index) + 1} • {e.durationSec.toFixed(2)}s — {e.reason}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {slices.length > 0 ? (
+                      <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                        {slices.map((sl) => {
+                          const sErrs = errorBySceneId.get(sl.sceneId) ?? [];
+                          const bad = sErrs.length > 0;
+                          return (
+                            <div key={sl.sceneId} className={`p-2 text-xs ${bad ? "bg-destructive/5" : ""}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">
+                                  Scene {Number(sl.index ?? 0) + 1}
+                                  <span className="text-muted-foreground ml-2 font-mono">
+                                    start {Number(sl.startSec).toFixed(2)}s • dur {Number(sl.durationSec).toFixed(2)}s
+                                  </span>
+                                </span>
+                                <div className="flex gap-1 shrink-0">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(sl.url);
+                                      toast({ title: "Slice URL copied" });
+                                    }}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    asChild
+                                  >
+                                    <a href={sl.url} target="_blank" rel="noreferrer">
+                                      <Play className="h-3 w-3" />
+                                    </a>
+                                  </Button>
+                                </div>
+                              </div>
+                              <a
+                                href={sl.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block mt-1 font-mono text-[10px] text-muted-foreground hover:text-foreground truncate"
+                                title={sl.url}
+                              >
+                                {sl.url}
+                              </a>
+                              {bad && (
+                                <ul className="mt-1 pl-3 text-[11px] text-destructive list-disc">
+                                  {sErrs.map((e, i) => <li key={i}>{e.reason}</li>)}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No slices yet. Click <span className="font-medium">Re-slice audio</span> to generate them from this job's scene timings.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()
+            )}
+
+
+
             {/* Actions */}
             <div className="p-4 border-t flex gap-2 justify-end">
               {mediaViewer.url && (
