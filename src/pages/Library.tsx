@@ -8,7 +8,7 @@ import {
   Download, Loader2, Trash2, AlertCircle, Image, Video, Play, X, 
   LayoutGrid, Mail, Copy, Check, RefreshCw, Search, Filter, 
   CheckSquare, Square, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Undo2,
-  User, Users, Music2, Share2, RotateCcw, Clock, Scissors, Film
+  User, Users, Music2, Share2, RotateCcw, Clock, Scissors, Film, Eye, Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -194,10 +194,26 @@ const DATE_FILTER_OPTIONS = [
   { value: "month", label: "This Month" },
 ];
 
+const EXPIRY_FILTER_OPTIONS = [
+  { value: "all", label: "Any Expiry" },
+  { value: "expiring_soon", label: "Expiring ≤ 3 days" },
+  { value: "expiring_week", label: "Expiring ≤ 7 days" },
+  { value: "fresh", label: "Fresh (> 7 days)" },
+];
+
+const DURATION_FILTER_OPTIONS = [
+  { value: "all", label: "Any Duration" },
+  { value: "short", label: "Short (< 30s)" },
+  { value: "medium", label: "Medium (30–90s)" },
+  { value: "long", label: "Long (> 90s)" },
+];
+
 const SORT_OPTIONS = [
   { value: "date", label: "Date" },
   { value: "style", label: "Style" },
   { value: "status", label: "Status" },
+  { value: "expiry", label: "Expiry" },
+  { value: "duration", label: "Duration" },
 ];
 
 type SortDirection = "asc" | "desc";
@@ -232,6 +248,9 @@ const Library = () => {
   const [sortBy, setSortBy] = useState<string>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [dateFilter, setDateFilter] = useState("all");
+  const [expiryFilter, setExpiryFilter] = useState("all");
+  const [durationFilter, setDurationFilter] = useState("all");
+  const [isBulkRegenerating, setIsBulkRegenerating] = useState(false);
   
   // Get unique emails for admin filter
   const uniqueEmails = useMemo(() => {
@@ -298,6 +317,24 @@ const Library = () => {
         }
       }
       
+      // Expiry filter (based on 14-day retention from completed_at)
+      if (expiryFilter !== "all") {
+        const info = getVideoExpiryInfo(ad.completed_at);
+        if (!info) return false;
+        if (expiryFilter === "expiring_soon" && info.daysLeft > 3) return false;
+        if (expiryFilter === "expiring_week" && info.daysLeft > 7) return false;
+        if (expiryFilter === "fresh" && info.daysLeft <= 7) return false;
+      }
+
+      // Duration filter (videos only)
+      if (durationFilter !== "all") {
+        const d = ad.video_duration ?? 0;
+        if (!d) return false;
+        if (durationFilter === "short" && !(d < 30)) return false;
+        if (durationFilter === "medium" && !(d >= 30 && d <= 90)) return false;
+        if (durationFilter === "long" && !(d > 90)) return false;
+      }
+
       // Search filter (search in style label, ad copy, and email for admins)
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -326,13 +363,21 @@ const Library = () => {
         const statusOrder = { completed: 0, processing: 1, failed: 2 };
         comparison = (statusOrder[a.status as keyof typeof statusOrder] || 3) - 
                      (statusOrder[b.status as keyof typeof statusOrder] || 3);
+      } else if (sortBy === "expiry") {
+        const ai = getVideoExpiryInfo(a.completed_at);
+        const bi = getVideoExpiryInfo(b.completed_at);
+        const av = ai ? ai.daysLeft * 24 + ai.hoursLeft : Number.POSITIVE_INFINITY;
+        const bv = bi ? bi.daysLeft * 24 + bi.hoursLeft : Number.POSITIVE_INFINITY;
+        comparison = av - bv;
+      } else if (sortBy === "duration") {
+        comparison = (a.video_duration ?? 0) - (b.video_duration ?? 0);
       }
       
       return sortDirection === "asc" ? comparison : -comparison;
     });
 
     return sorted;
-  }, [ads, statusFilter, styleFilter, emailFilter, dateFilter, searchQuery, sortBy, sortDirection, pendingDeletes, isAdmin, impersonatedUserId]);
+  }, [ads, statusFilter, styleFilter, emailFilter, dateFilter, expiryFilter, durationFilter, searchQuery, sortBy, sortDirection, pendingDeletes, isAdmin, impersonatedUserId]);
 
   const openMediaViewer = (type: 'image' | 'video', url: string, title: string, ad: GeneratedAd) => {
     setMediaViewer({ isOpen: true, type, url, title, ad });
@@ -1083,9 +1128,38 @@ const Library = () => {
     setStyleFilter("all");
     setDateFilter("all");
     setEmailFilter("all");
+    setExpiryFilter("all");
+    setDurationFilter("all");
   };
 
-  const hasActiveFilters = searchQuery || statusFilter !== "all" || styleFilter !== "all" || dateFilter !== "all" || (isAdmin && emailFilter !== "all");
+  const hasActiveFilters = searchQuery || statusFilter !== "all" || styleFilter !== "all" || dateFilter !== "all" || expiryFilter !== "all" || durationFilter !== "all" || (isAdmin && emailFilter !== "all");
+
+  // Bulk regenerate of selected lyric video ads
+  const handleBulkRegenerateSelected = async () => {
+    const selectedAds = ads.filter(ad => selectedIds.has(ad.id) && isLyricVideo(ad) && ad.ad_copy);
+    if (selectedAds.length === 0) {
+      toast({
+        title: "No regenerable selections",
+        description: "Select completed or failed AI Music Videos to regenerate.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsBulkRegenerating(true);
+    let queued = 0;
+    for (const ad of selectedAds) {
+      try {
+        await handleRegenerate(ad);
+        queued++;
+      } catch { /* continue */ }
+    }
+    setIsBulkRegenerating(false);
+    setSelectedIds(new Set());
+    toast({
+      title: `Regeneration queued`,
+      description: `${queued} of ${selectedAds.length} videos re-queued.`,
+    });
+  };
 
   if (loading) {
     return (
@@ -1221,6 +1295,20 @@ const Library = () => {
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              onClick={handleBulkRegenerateSelected}
+              disabled={isBulkRegenerating || isDownloadingBatch || isDeletingBatch}
+              title="Regenerate selected AI Music Videos"
+            >
+              {isBulkRegenerating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4 mr-2" />
+              )}
+              Regenerate
+            </Button>
+            <Button
+              size="sm"
               variant="ghost"
               onClick={() => setSelectedIds(new Set())}
             >
@@ -1305,6 +1393,37 @@ const Library = () => {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Expiry Filter */}
+          <Select value={expiryFilter} onValueChange={setExpiryFilter}>
+            <SelectTrigger className="w-[170px]">
+              <Clock className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Expiry" />
+            </SelectTrigger>
+            <SelectContent>
+              {EXPIRY_FILTER_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Duration Filter */}
+          <Select value={durationFilter} onValueChange={setDurationFilter}>
+            <SelectTrigger className="w-[170px]">
+              <Timer className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Duration" />
+            </SelectTrigger>
+            <SelectContent>
+              {DURATION_FILTER_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
 
           {/* Sorting */}
           <div className="flex items-center gap-2">
@@ -2302,8 +2421,8 @@ const Library = () => {
                 )}
               </div>
 
-              {/* Expiry countdown — top-right under the selection checkbox */}
-              {hasVideo && isCompleted && (() => {
+              {/* Expiry countdown — top-right under the selection checkbox (videos AND images) */}
+              {isCompleted && (() => {
                 const expiryInfo = getVideoExpiryInfo(ad.completed_at);
                 if (!expiryInfo) return null;
                 return (
@@ -2333,7 +2452,16 @@ const Library = () => {
 
               {/* Quick Actions */}
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                {isLyric && (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8"
+                  title="View"
+                  onClick={(e) => { e.stopPropagation(); handleThumbnailClick(); }}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                {hasVideo && (
                   <Button
                     size="icon"
                     variant="secondary"
@@ -2362,6 +2490,7 @@ const Library = () => {
                   size="icon"
                   variant="secondary"
                   className="h-8 w-8"
+                  title="Download / export"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (isLyric && hasVideo) {
@@ -2379,6 +2508,7 @@ const Library = () => {
                   size="icon"
                   variant="destructive"
                   className="h-8 w-8"
+                  title="Delete"
                   onClick={(e) => {
                     e.stopPropagation();
                     confirmSingleDelete(ad.id);
