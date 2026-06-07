@@ -469,7 +469,7 @@ export async function regenerateAllScenes(opts: { adId: string; userId: string }
   if (count === 0) throw new Error("No scenes to regenerate");
 
   await sb.from("video_scenes").update({
-    image_status: "pending", error_message: null, image_url: null,
+    image_status: "pending", error_message: null, image_url: null, failed_step: null,
   }).eq("ad_id", opts.adId);
 
   await patchAd(opts.adId, { video_progress: 45 }, { pipelineStage: "storyboard" });
