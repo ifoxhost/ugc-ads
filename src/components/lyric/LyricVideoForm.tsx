@@ -34,7 +34,7 @@ export interface LyricVideoFormData {
   bpm: number;
   referenceImageUrl: string | null;
   referenceImageName: string | null;
-  aiModel: "kling" | "veo";
+  aiModel: "seedance" | "seedance-pro" | "kling" | "veo";
   aiImageModel: "nano-banana";
   resolution: "720p" | "1080p" | "1440p" | "4k";
   quality: "standard" | "high" | "ultra";
@@ -73,7 +73,7 @@ export const DEFAULT_LYRIC_FORM: LyricVideoFormData = {
   bpm: 128,
   referenceImageUrl: null,
   referenceImageName: null,
-  aiModel: "kling",
+  aiModel: "seedance",
   aiImageModel: "nano-banana",
   resolution: "1080p",
   quality: "high",
@@ -415,6 +415,8 @@ const LyricVideoForm = ({ formData, onChange, disabled }: LyricVideoFormProps) =
               <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">AI Video Engine</Label>
               <div className="grid grid-cols-2 gap-2">
                 {[
+                  { value: "seedance", label: "Seedance 2.0 Fast", desc: "Default · beat-aware motion" },
+                  { value: "seedance-pro", label: "Seedance 2.0", desc: "Higher fidelity, slower" },
                   { value: "kling", label: "Kling 3.0", desc: "Cinematic movement" },
                   { value: "veo", label: "Google VEO 3.1", desc: "Photorealistic detailing" }
                 ].map((model) => (

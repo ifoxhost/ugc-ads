@@ -563,12 +563,19 @@ export async function regenerateFailedScenes(opts: { adId: string; userId: strin
 
 
 // ── Kie.ai render submit + poll helpers (used by render & poll functions) ───
-// Kie.ai uses two different endpoint shapes:
-//   - Market models (Kling, Seedream, etc.) → POST /api/v1/jobs/createTask
+// Kie.ai uses three endpoint shapes:
+//   - Market models (Kling, Seedance, Seedream, etc.) → POST /api/v1/jobs/createTask
 //     with body { model, input } and are polled via /api/v1/jobs/recordInfo
 //   - Veo has its own endpoint → POST /api/v1/veo/generate, polled at
-//     /api/v1/veo/record-info (but recordInfo also accepts veo taskIds).
-const KIE_MODELS: Record<string, { id: string; endpoint: string; kind: "market" | "veo" }> = {
+//     /api/v1/veo/record-info (recordInfo also accepts veo taskIds).
+//   - Seedance 2.0 (ByteDance) is a market model that natively accepts
+//     reference images + audio and beat-matches motion. Per kie.ai spec
+//     each clip is capped at ~15s of output and ~15s of reference audio,
+//     so we still emit one clip per scene and stitch the full song over
+//     them in stitch-lyric-video.
+const KIE_MODELS: Record<string, { id: string; endpoint: string; kind: "market" | "veo" | "seedance" }> = {
+  seedance: { id: "bytedance/seedance-2-fast", endpoint: `${KIE_AI_API}/api/v1/jobs/createTask`, kind: "seedance" },
+  "seedance-pro": { id: "bytedance/seedance-2", endpoint: `${KIE_AI_API}/api/v1/jobs/createTask`, kind: "seedance" },
   kling: { id: "kling-2.6", endpoint: `${KIE_AI_API}/api/v1/jobs/createTask`, kind: "market" },
   veo:   { id: "veo-3.1",   endpoint: `${KIE_AI_API}/api/v1/veo/generate`,   kind: "veo"    },
 };
@@ -591,22 +598,34 @@ export function klingDuration(sec: unknown): "5" | "10" {
   return n >= 8 ? "10" : "5";
 }
 
+// Seedance 2.0 accepts arbitrary integer seconds up to ~15s per clip.
+export function seedanceDuration(sec: unknown): number {
+  const n = Math.round(Number(sec ?? 8));
+  if (!Number.isFinite(n) || n < 3) return 5;
+  if (n > 15) return 15;
+  return n;
+}
+
 export interface KieClipSpec {
   sceneId: string;
   index: number;
   imageUrl: string;
   prompt: string;
-  durationSec: number; // 5 or 10
+  durationSec: number; // 5 or 10 for Kling/Veo; up to 15 for Seedance
   aspectRatio: string;
+  // Optional ≤15s audio slice for Seedance beat-matching. The full song is
+  // still muxed over the final stitched video by stitch-lyric-video.
+  referenceAudioUrl?: string;
 }
 
 /**
- * Submit ONE Kie.ai Kling/Veo clip per scene with `sound: false`. The audio
- * track from the imported song is muxed back in by `stitch-lyric-video` after
- * every clip finishes. Returns the Kie task id for polling.
+ * Submit ONE Kie.ai clip per scene with `sound: false` (Kling) or
+ * `generate_audio: false` (Seedance). The imported song is muxed back in
+ * by `stitch-lyric-video` after every clip finishes. Returns the Kie task
+ * id for polling.
  */
 export async function submitKieClip(args: {
-  kind: "market" | "veo";
+  kind: "market" | "veo" | "seedance";
   endpoint: string;
   modelId: string;
   clip: KieClipSpec;
@@ -614,7 +633,6 @@ export async function submitKieClip(args: {
   const key = Deno.env.get("KIE_AI_API_KEY");
   if (!key) throw new Error("KIE_AI_API_KEY missing");
   const aspect = kieAspect(args.clip.aspectRatio);
-  const duration = klingDuration(args.clip.durationSec);
 
   let body: Record<string, unknown>;
   if (args.kind === "veo") {
@@ -625,7 +643,24 @@ export async function submitKieClip(args: {
       aspectRatio: aspect,
       enableFallback: true,
     };
+  } else if (args.kind === "seedance") {
+    const duration = seedanceDuration(args.clip.durationSec);
+    const input: Record<string, unknown> = {
+      prompt: args.clip.prompt,
+      reference_image_urls: [args.clip.imageUrl],
+      generate_audio: false, // stitch-lyric-video muxes the real song
+      resolution: "1080p",
+      aspect_ratio: aspect,
+      duration,
+    };
+    // Pass the scene-aligned audio reference if provided. Kie caps total
+    // reference audio at 15s, so callers must pre-slice longer songs.
+    if (args.clip.referenceAudioUrl) {
+      input.reference_audio_urls = [args.clip.referenceAudioUrl];
+    }
+    body = { model: args.modelId || "bytedance/seedance-2-fast", input };
   } else {
+    const duration = klingDuration(args.clip.durationSec);
     const baseModel = (args.modelId || "kling-2.6").replace(/\/(image|text)-to-video$/, "");
     body = {
       model: `${baseModel}/image-to-video`,

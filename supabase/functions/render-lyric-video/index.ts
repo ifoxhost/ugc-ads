@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireSecrets, jsonError } from "../_shared/startup-checks.ts";
-import { getKieModel, submitKieClip, klingDuration } from "../_shared/pipeline.ts";
+import { getKieModel, submitKieClip, klingDuration, seedanceDuration } from "../_shared/pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,7 +44,15 @@ serve(async (req) => {
     }
 
     const adCopy = (ad.ad_copy ?? {}) as Record<string, unknown>;
-    const modelKey = String(adCopy.aiModel ?? "kling-3.0").startsWith("veo") ? "veo" : "kling";
+    // Resolve model key: aiModel may be a short key ("seedance"|"kling"|"veo")
+    // or a full Kie id ("bytedance/seedance-2-fast"|"kling-2.6"|"veo-3.1").
+    const rawModel = String(adCopy.aiModel ?? "seedance").toLowerCase();
+    const modelKey =
+      rawModel.includes("seedance")
+        ? (rawModel === "seedance-pro" || rawModel === "bytedance/seedance-2" ? "seedance-pro" : "seedance")
+      : rawModel.startsWith("veo") ? "veo"
+      : rawModel.startsWith("kling") ? "kling"
+      : "seedance";
     const kieModel = getKieModel(modelKey)!;
     const aspect = ad.aspect_ratio ?? "9:16";
     const songTitle = String(adCopy.title ?? "Lyric video");
@@ -58,7 +66,9 @@ serve(async (req) => {
 
     for (const s of scenes) {
       const sceneDur = Math.max(1, Number(s.end_sec) - Number(s.start_sec));
-      const clipDur = Number(klingDuration(sceneDur)); // 5 or 10
+      const clipDur = kieModel.kind === "seedance"
+        ? seedanceDuration(sceneDur)
+        : Number(klingDuration(sceneDur)); // Kling/Veo: 5 or 10
       const promptText = [
         `"${songTitle}" — scene ${s.index + 1}/${scenes.length}.`,
         (s.prompt as any)?.story,
