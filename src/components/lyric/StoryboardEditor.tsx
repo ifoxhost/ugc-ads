@@ -653,7 +653,7 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
     }
 
     const videoUrls = clips.map(c => c.videoUrl || c.video_url).filter(Boolean);
-    const audioUrl = ad.audio_url || ad.ad_copy?.audioUrl || "https://cdn1.suno.ai/7b879f5c-21d0-4922-89ea-fa5bdcd372d1.mp3";
+    const audioUrl = ad.ad_copy?.audioFileUrl || ad.ad_copy?.audioUrl || ad.audio_url || null;
     
     if (videoUrls.length === 0) {
       toast({
