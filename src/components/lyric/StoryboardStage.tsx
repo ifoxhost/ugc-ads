@@ -175,6 +175,17 @@ export default function StoryboardStage({ adId, onClose }: Props) {
                 <div className="absolute top-2 left-2 text-[10px] bg-background/80 backdrop-blur px-2 py-0.5 rounded">
                   Scene {s.index + 1} • {Math.round(s.start_sec)}–{Math.round(s.end_sec)}s
                 </div>
+                <div className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded font-medium ${
+                  s.image_status === "ready" ? "bg-green-500/90 text-white"
+                  : s.image_status === "generating" ? "bg-primary/90 text-primary-foreground animate-pulse"
+                  : s.image_status === "failed" ? "bg-destructive/90 text-destructive-foreground"
+                  : "bg-muted text-muted-foreground"
+                }`}>
+                  {s.image_status === "ready" ? "Completed"
+                    : s.image_status === "generating" ? "Rendering…"
+                    : s.image_status === "failed" ? "Failed"
+                    : "Queued"}
+                </div>
               </div>
               <div className="p-3 space-y-2">
                 <p className="text-xs text-foreground/90 line-clamp-3">{s.prompt.story}</p>
@@ -186,14 +197,14 @@ export default function StoryboardStage({ adId, onClose }: Props) {
                 )}
                 <Button
                   size="sm" variant="outline" className="w-full"
-                  disabled={regenLoading === s.id || s.image_status === "generating"}
+                  disabled={regenLoading === s.id || s.image_status === "generating" || regenAllLoading}
                   onClick={() => handleRegen(s.id)}>
                   {regenLoading === s.id || s.image_status === "generating" ? (
                     <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                   ) : (
                     <RefreshCw className="w-3 h-3 mr-1" />
                   )}
-                  Regenerate {s.regen_count > 0 && `(${s.regen_count})`}
+                  Re-roll this scene {s.regen_count > 0 && `(${s.regen_count})`}
                 </Button>
               </div>
             </div>
@@ -203,10 +214,21 @@ export default function StoryboardStage({ adId, onClose }: Props) {
 
       {/* Action bar */}
       <div className="flex items-center justify-between gap-3 sticky bottom-4 bg-card/95 backdrop-blur border border-border rounded-2xl p-4">
-        <div className="text-xs text-muted-foreground">
-          {allReady ? "Storyboard ready — review and render when happy."
-            : anyFailed ? "Some scenes failed — regenerate before rendering."
-            : `${scenes.filter(s => s.image_status === "ready").length}/${scenes.length} scenes ready`}
+        <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+          {(() => {
+            const q = scenes.filter(s => s.image_status === "pending").length;
+            const r = scenes.filter(s => s.image_status === "generating").length;
+            const c = scenes.filter(s => s.image_status === "ready").length;
+            const f = scenes.filter(s => s.image_status === "failed").length;
+            return (
+              <>
+                <span><span className="text-foreground font-medium">{c}</span>/{scenes.length} completed</span>
+                {r > 0 && <span className="text-primary">• {r} rendering</span>}
+                {q > 0 && <span>• {q} queued</span>}
+                {f > 0 && <span className="text-destructive">• {f} failed</span>}
+              </>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2">
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
