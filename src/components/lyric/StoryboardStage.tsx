@@ -45,6 +45,7 @@ export default function StoryboardStage({ adId, onClose }: Props) {
   const [ad, setAd] = useState<AdRow | null>(null);
   const [scenes, setScenes] = useState<SceneRow[]>([]);
   const [regenLoading, setRegenLoading] = useState<string | null>(null);
+  const [regenAllLoading, setRegenAllLoading] = useState(false);
   const [rendering, setRendering] = useState(false);
 
   // Initial load + realtime subscriptions
