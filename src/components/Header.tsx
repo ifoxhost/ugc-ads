@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Library, HelpCircle, UserCircle, LogOut, LayoutDashboard, Shield, Video } from "lucide-react";
+import { Library, HelpCircle, UserCircle, LogOut, LayoutDashboard, Shield, Video, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUser } from "@/hooks/useUser";
