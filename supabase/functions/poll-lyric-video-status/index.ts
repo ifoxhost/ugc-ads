@@ -7,7 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_PROCESSING_MINUTES = 15;
+// Total wall-clock budget from ad creation: covers storyboard generation
+// (can take 10–15 min) + Kie render (~2 min). Bump generously so we never
+// preempt a render that Kie itself still reports as running.
+const MAX_PROCESSING_MINUTES = 45;
 
 // Polls Kie.ai directly for in-flight lyric-video renders. No n8n callbacks.
 serve(async (req) => {
@@ -30,7 +33,9 @@ serve(async (req) => {
     const now = new Date();
     for (const ad of pending) {
       const ageMin = (now.getTime() - new Date(ad.created_at).getTime()) / 60000;
-      if (ageMin > MAX_PROCESSING_MINUTES) {
+      const overBudget = ageMin > MAX_PROCESSING_MINUTES;
+      if (overBudget && !ad.video_task_id) {
+        // Truly stuck: never even reached Kie. Mark failed.
         await sb.from("generated_ads").update({
           status: "video_failed", video_status: "failed",
           video_last_checked_at: now.toISOString(),
