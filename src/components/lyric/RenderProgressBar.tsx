@@ -8,8 +8,8 @@ interface ActiveRender {
   id: string;
   style_template: string;
   aspect_ratio: string | null;
-  video_progress: number | null;
-  video_status: string | null;
+  video_progress?: number | null;
+  video_status?: string | null;
   status: string;
   ad_copy: {
     title?: string;

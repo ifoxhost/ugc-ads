@@ -731,7 +731,7 @@ const mockSupabase = {
                 // Pexels for reference images (input frame for video generation)
                 let realImgUrl = `https://picsum.photos/id/${(10 + idx) % 85}/1920/1080`; // fallback
                 try {
-                  const searchPrompt = (lyricLines[idx] || prompts[idx]) + " " + project.visual_theme;
+                  const searchPrompt = (sc.prompt || "") + " " + project.visual_theme;
                   console.log(`[Pexels Pipeline] Searching reference image for: "${searchPrompt}"`);
                   const res = await fetch("http://localhost:3000/api/pexels/search", {
                     method: "POST",

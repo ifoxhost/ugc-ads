@@ -118,7 +118,7 @@ const Library = () => {
   const [isDeletingSingle, setIsDeletingSingle] = useState(false);
   
   // Undo delete state
-  const [pendingDeletes, setPendingDeletes] = useState<Map<string, { ad: GeneratedAd; timeoutId: NodeJS.Timeout }>>(new Map());
+  const [pendingDeletes, setPendingDeletes] = useState<Map<string, { ad: GeneratedAd; timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
   const UNDO_TIMEOUT = 8000; // 8 seconds to undo
   
   // Filter states
