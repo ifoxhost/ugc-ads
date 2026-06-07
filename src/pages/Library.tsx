@@ -8,13 +8,13 @@ import {
   Download, Loader2, Trash2, AlertCircle, Image, Video, Play, X, 
   LayoutGrid, Mail, Copy, Check, RefreshCw, Search, Filter, 
   CheckSquare, Square, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Undo2,
-  User, Users, Music2, Share2, RotateCcw, Clock, Scissors
+  User, Users, Music2, Share2, RotateCcw, Clock, Scissors, Film
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonner } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import StoryboardEditor from "@/components/lyric/StoryboardEditor";
+import StoryboardManager from "@/components/lyric/StoryboardManager";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -1109,7 +1109,7 @@ const Library = () => {
 
   if (editingStoryboardAd) {
     return (
-      <StoryboardEditor
+      <StoryboardManager
         ad={editingStoryboardAd}
         onClose={() => setEditingStoryboardAd(null)}
         onSave={(updatedAd) => {
@@ -2149,7 +2149,7 @@ const Library = () => {
               <p className="text-xs text-muted-foreground mt-2 text-center">
                 {new Date(ad.created_at).toLocaleString()}
               </p>
-              <div className="flex gap-2 mt-4">
+              <div className="flex gap-2 mt-4 flex-wrap justify-center">
                 {!isLyric && (
                   <Button
                     onClick={() => handleRetry(ad)}
@@ -2163,6 +2163,16 @@ const Library = () => {
                       <RefreshCw className="h-4 w-4 mr-2" />
                     )}
                     Retry
+                  </Button>
+                )}
+                {isLyric && (
+                  <Button
+                    onClick={() => setEditingStoryboardAd(ad)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Film className="h-4 w-4 mr-2" />
+                    Open Storyboard
                   </Button>
                 )}
                 <Button
@@ -2262,6 +2272,17 @@ const Library = () => {
 
               {/* Quick Actions */}
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                {isLyric && (
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="h-8 w-8"
+                    title="Open storyboard"
+                    onClick={(e) => { e.stopPropagation(); setEditingStoryboardAd(ad); }}
+                  >
+                    <Film className="h-4 w-4" />
+                  </Button>
+                )}
                 {isLyric && isCompleted && (
                   <Button
                     size="icon"
