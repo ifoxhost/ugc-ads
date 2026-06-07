@@ -2208,5 +2208,71 @@ function CopyableField({ label, value, field, copiedField, onCopy }: CopyableFie
   );
 }
 
+interface RestitchControlsProps {
+  ad: GeneratedAd;
+  busy: boolean;
+  onRestitch: (ad: GeneratedAd, overrides?: { falMaxAttempts?: number; toleranceSec?: number }) => void;
+  onDownloadAudit: (ad: GeneratedAd) => void;
+}
+
+function RestitchControls({ ad, busy, onRestitch, onDownloadAudit }: RestitchControlsProps) {
+  const currentTol = ad.ad_copy?.stitchValidation?.toleranceSec ?? 1.5;
+  const [attempts, setAttempts] = useState<number>(2);
+  const [tolerance, setTolerance] = useState<number>(Number(currentTol) || 1.5);
+  const [useOverride, setUseOverride] = useState(false);
+  return (
+    <div className="flex flex-wrap gap-2 pt-2 items-end">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button size="sm" variant="ghost">
+            <Filter className="h-4 w-4 mr-2" />
+            {useOverride ? `Override: ${attempts} × ±${tolerance}s` : "Override defaults"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">Per-job overrides</label>
+            <Checkbox checked={useOverride} onCheckedChange={(v) => setUseOverride(!!v)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">fal.ai max attempts (1–5)</label>
+            <Input
+              type="number" min={1} max={5} value={attempts}
+              disabled={!useOverride}
+              onChange={(e) => setAttempts(Math.min(5, Math.max(1, parseInt(e.target.value || "2", 10))))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Drift tolerance (seconds, 0.1–30)</label>
+            <Input
+              type="number" min={0.1} max={30} step={0.1} value={tolerance}
+              disabled={!useOverride}
+              onChange={(e) => setTolerance(Math.min(30, Math.max(0.1, parseFloat(e.target.value || "1.5"))))}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Leave unchecked to use the project-wide env defaults.
+          </p>
+        </PopoverContent>
+      </Popover>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => onRestitch(ad, useOverride ? { falMaxAttempts: attempts, toleranceSec: tolerance } : undefined)}
+        disabled={busy}
+      >
+        {busy
+          ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          : <Scissors className="h-4 w-4 mr-2" />}
+        Re-stitch
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => onDownloadAudit(ad)}>
+        <Download className="h-4 w-4 mr-2" />
+        Download audit (JSON)
+      </Button>
+    </div>
+  );
+}
+
 export default Library;
 
