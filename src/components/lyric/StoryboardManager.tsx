@@ -473,7 +473,22 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                         <span className="text-xs font-semibold text-primary">
                           SCENE {scene.index + 1}
                         </span>
-                        {statusBadge}
+                        <div className="flex items-center gap-2">
+                          {statusBadge}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            title={scene.locked ? "Unlock scene" : "Lock scene"}
+                            onClick={() => toggleSceneLock(scene)}
+                          >
+                            {scene.locked ? (
+                              <Lock className="h-3.5 w-3.5 text-amber-500" />
+                            ) : (
+                              <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
                       <Button
                         size="sm"
