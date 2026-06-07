@@ -118,26 +118,37 @@ serve(async (req) => {
 
     const aspect = (ad.aspect_ratio ?? "9:16") as string;
 
-    // === PRIMARY: fal.ai compose ===
+    // === PRIMARY: fal.ai compose (with bounded retries) ===
+    let lastFalDrift: { measured: number | null; delta: number | null } | null = null;
+    let falAttempts = 0;
     if (falKey) {
-      try {
-        const falUrl = await stitchWithFal({
-          falKey, clipPlan, audioUrl, totalDuration, aspect,
-        });
-        if (falUrl) {
-          const drift = await validateDuration(falUrl, totalDuration);
-          if (drift.ok) {
-            console.log(`[stitch] fal OK ad=${adId} drift=${drift.delta}s`);
-            await finalize(sb, ad.id, ad.user_id, falUrl, adCopy, "fal.ai/compose", drift);
-            return json({ success: true, videoUrl: falUrl, via: "fal", drift });
+      for (let attempt = 1; attempt <= FAL_MAX_ATTEMPTS; attempt++) {
+        falAttempts = attempt;
+        try {
+          const falUrl = await stitchWithFal({
+            falKey, clipPlan, audioUrl, totalDuration, aspect,
+          });
+          if (!falUrl) {
+            console.warn(`[stitch] fal attempt=${attempt}/${FAL_MAX_ATTEMPTS} returned no url ad=${adId}`);
+            continue;
           }
-          console.warn(`[stitch] fal drift too large ad=${adId} delta=${drift.delta}s — falling back to Shotstack`);
+          const drift = await validateDuration(falUrl, totalDuration);
+          lastFalDrift = drift;
+          if (drift.ok) {
+            console.log(`[stitch] fal OK ad=${adId} attempt=${attempt} drift=${drift.delta}s`);
+            await finalize(sb, ad.id, ad.user_id, falUrl, adCopy, "fal.ai/compose", drift, {
+              attempts: attempt, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+            });
+            return json({ success: true, videoUrl: falUrl, via: "fal", attempt, drift });
+          }
+          console.warn(`[stitch] fal drift too large ad=${adId} attempt=${attempt} delta=${drift.delta}s tolerance=${DURATION_TOLERANCE_SEC}s — retrying`);
+        } catch (e) {
+          console.error(`[stitch] fal error ad=${adId} attempt=${attempt}:`, redact((e as Error).message, falKey));
         }
-      } catch (e) {
-        console.error(`[stitch] fal error ad=${adId}:`, (e as Error).message);
       }
+      console.warn(`[stitch] fal exhausted ${FAL_MAX_ATTEMPTS} attempts ad=${adId} — falling back to Shotstack`);
     } else {
-      console.warn(`[stitch] FAL_KEY missing — skipping primary stitcher`);
+      console.warn(`[stitch] FAL_KEY missing or malformed — skipping primary stitcher`);
     }
 
     // === FALLBACK: Shotstack ===
@@ -150,13 +161,15 @@ serve(async (req) => {
         if (ssUrl) {
           const drift = await validateDuration(ssUrl, totalDuration);
           console.log(`[stitch] shotstack OK ad=${adId} drift=${drift.delta}s ok=${drift.ok}`);
-          // Even if drift is bad, Shotstack is the last resort — publish but flag.
           await finalize(sb, ad.id, ad.user_id, ssUrl, adCopy,
-            drift.ok ? "shotstack" : "shotstack_with_drift", drift);
+            drift.ok ? "shotstack" : "shotstack_with_drift", drift, {
+              attempts: 1, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+              falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
+            });
           return json({ success: true, videoUrl: ssUrl, via: "shotstack", drift });
         }
       } catch (e) {
-        console.error(`[stitch] shotstack error ad=${adId}:`, (e as Error).message);
+        console.error(`[stitch] shotstack error ad=${adId}:`, redact((e as Error).message, falKey));
       }
     }
 
