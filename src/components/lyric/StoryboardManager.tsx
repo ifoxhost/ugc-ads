@@ -314,7 +314,10 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                 <span className="font-semibold text-foreground">{songTitle}</span>
                 {artist ? <> — {artist}</> : null}
                 <span className="mx-2">·</span>
-                {readyCount}/{scenes.length} scenes ready
+                {readyCount}/{unlockedScenes.length} scenes ready
+                {scenes.length !== unlockedScenes.length && (
+                  <span className="text-muted-foreground"> ({scenes.length - unlockedScenes.length} locked)</span>
+                )}
               </p>
             </div>
           </div>
