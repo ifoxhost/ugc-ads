@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { toast as sonner } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StoryboardEditor from "@/components/lyric/StoryboardEditor";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog";
@@ -180,6 +181,7 @@ const Library = () => {
   const [ads, setAds] = useState<GeneratedAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [copiedSliceKey, setCopiedSliceKey] = useState<string | null>(null);
   const [editingStoryboardAd, setEditingStoryboardAd] = useState<any | null>(null);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -323,8 +325,40 @@ const Library = () => {
     }
   }, [ads, mediaViewer.isOpen, mediaViewer.ad]);
 
+  // Reset slice-phase tracker whenever the viewed ad changes.
+  useEffect(() => {
+    prevSlicePhaseRef.current = mediaViewer.ad?.ad_copy?.sliceStatus?.phase ?? null;
+  }, [mediaViewer.ad?.id]);
+
+  // Aggressive polling + transition toast while a Re-slice is active.
+  useEffect(() => {
+    if (!mediaViewer.isOpen || !mediaViewer.ad) return;
+    const phase = mediaViewer.ad.ad_copy?.sliceStatus?.phase;
+    const isActive = phase === "queued" || phase === "uploading" || phase === "slicing" || phase === "validating";
+
+    // Toast when the Re-slice job transitions from active → done/failed
+    const prev = prevSlicePhaseRef.current;
+    const wasActive = prev === "queued" || prev === "uploading" || prev === "slicing" || prev === "validating";
+    if (wasActive && phase === "done") {
+      const count = mediaViewer.ad.ad_copy?.sliceStatus?.sliceCount ?? 0;
+      sonner.success("Audio re-slice complete", {
+        description: `${count} scene slice${count === 1 ? "" : "s"} ready.`,
+      });
+    } else if (wasActive && phase === "failed") {
+      const err = mediaViewer.ad.ad_copy?.sliceStatus?.error ?? "Unknown error";
+      sonner.error("Audio re-slice failed", { description: err });
+    }
+    prevSlicePhaseRef.current = phase ?? null;
+
+    if (!isActive) return;
+    const interval = setInterval(() => { fetchAds(); }, 2000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaViewer.isOpen, mediaViewer.ad?.id, mediaViewer.ad?.ad_copy?.sliceStatus?.phase]);
+
   // Track which ad IDs were "processing" so we can detect transitions → completed
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
+  const prevSlicePhaseRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetchAds();
@@ -699,6 +733,40 @@ const Library = () => {
       toast({ title: "Error", description: "Could not copy to clipboard.", variant: "destructive" });
     }
   };
+
+  /** Robust clipboard write with fallback for blocked / non-secure contexts */
+  const writeToClipboard = async (text: string): Promise<boolean> => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch { return false; }
+  };
+
+  const copySliceField = useCallback(async (value: string, label: string, key: string) => {
+    const ok = await writeToClipboard(value);
+    if (ok) {
+      sonner.success(`${label} copied`, {
+        description: value.length > 80 ? `${value.slice(0, 80)}…` : value,
+      });
+      setCopiedSliceKey(key);
+      setTimeout(() => setCopiedSliceKey((prev) => (prev === key ? null : prev)), 2000);
+    } else {
+      sonner.error("Copy failed", {
+        description: "Clipboard access is blocked. Select the text manually and press Ctrl/Cmd+C.",
+      });
+    }
+  }, []);
 
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const [restitchingIds, setRestitchingIds] = useState<Set<string>>(new Set());
@@ -1606,12 +1674,7 @@ const Library = () => {
                   const payload = JSON.stringify(
                     { startSec: sl.startSec, durationSec: sl.durationSec, url: sl.url }, null, 2,
                   );
-                  navigator.clipboard.writeText(payload);
-                  toast({ title: `Scene ${Number(sl.index ?? 0) + 1} metadata copied` });
-                };
-                const copyValue = (label: string, value: string) => {
-                  navigator.clipboard.writeText(value);
-                  toast({ title: `${label} copied`, description: value });
+                  copySliceField(payload, `Scene ${Number(sl.index ?? 0) + 1} metadata`, `json-${sl.sceneId}`);
                 };
                 return (
                   <div className="p-4 border-t space-y-3">
@@ -1737,27 +1800,29 @@ const Library = () => {
                                     variant="ghost"
                                     className="h-7 px-2 text-[10px]"
                                     title="Copy start (seconds)"
-                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} start`, startStr)}
+                                    onClick={() => copySliceField(startStr, `Scene ${Number(sl.index ?? 0) + 1} start`, `start-${sl.sceneId}`)}
                                   >
-                                    <Clock className="h-3 w-3 mr-1" />start
+                                    {copiedSliceKey === `start-${sl.sceneId}` ? <Check className="h-3 w-3 mr-1 text-primary" /> : <Clock className="h-3 w-3 mr-1" />}
+                                    start
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 px-2 text-[10px]"
                                     title="Copy duration (seconds)"
-                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} duration`, durStr)}
+                                    onClick={() => copySliceField(durStr, `Scene ${Number(sl.index ?? 0) + 1} duration`, `dur-${sl.sceneId}`)}
                                   >
-                                    <Clock className="h-3 w-3 mr-1" />dur
+                                    {copiedSliceKey === `dur-${sl.sceneId}` ? <Check className="h-3 w-3 mr-1 text-primary" /> : <Clock className="h-3 w-3 mr-1" />}
+                                    dur
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 px-2"
                                     title="Copy slice URL"
-                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} URL`, sl.url)}
+                                    onClick={() => copySliceField(sl.url, `Scene ${Number(sl.index ?? 0) + 1} URL`, `url-${sl.sceneId}`)}
                                   >
-                                    <Copy className="h-3 w-3" />
+                                    {copiedSliceKey === `url-${sl.sceneId}` ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
                                   </Button>
                                   <Button
                                     size="sm"
@@ -1766,7 +1831,8 @@ const Library = () => {
                                     title="Copy {startSec, durationSec, url} as JSON"
                                     onClick={() => copyMeta(sl)}
                                   >
-                                    JSON
+                                    {copiedSliceKey === `json-${sl.sceneId}` ? <Check className="h-3 w-3 mr-1 text-primary" /> : null}
+                                    {copiedSliceKey === `json-${sl.sceneId}` ? "Copied!" : "JSON"}
                                   </Button>
                                   <Button
                                     size="sm"
