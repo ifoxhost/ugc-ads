@@ -215,14 +215,7 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
             onClick={() => (ad.status === "completed" || ad.generated_video_url) && setSelectedAd(ad)}
           >
             <CardContent className="p-0 relative">
-              {ad.status === "processing" ? (
-                <div className="aspect-square flex items-center justify-center bg-muted">
-                  <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                    <span className="text-xs text-muted-foreground">Generating...</span>
-                  </div>
-                </div>
-              ) : ad.status === "processing" || isVideoProcessing(ad) || isVideoRetrying(ad) ? (
+              {ad.status === "processing" || isVideoProcessing(ad) || isVideoRetrying(ad) ? (
                 <div className="aspect-square flex items-center justify-center bg-muted relative">
                   {ad.generated_image_url || ad.product_image_url ? (
                     <img
