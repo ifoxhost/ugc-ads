@@ -970,8 +970,8 @@ const mockSupabase = {
 
 // Real Supabase client initialization (imported in production)
 import { createClient } from '@supabase/supabase-js';
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://eqiwbtxomiskpekgrsph.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxaXdidHhvbWlza3Bla2dyc3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMzk4MDEsImV4cCI6MjA3NDkxNTgwMX0.EdsQxbtq9_KLFLv7aFd59zkQV3HOO55IDMn2BmhqD5A";
 
 const realSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
