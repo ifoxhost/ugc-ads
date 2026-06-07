@@ -31,6 +31,41 @@ const SHOTSTACK_STAGE = "https://api.shotstack.io/edit/stage";
 
 // Duration drift we'll accept before rejecting a stitched output (seconds).
 const DURATION_TOLERANCE_SEC = 1.5;
+// How many times we retry fal.ai compose end-to-end (submit + validate)
+// before giving up and handing off to Shotstack.
+const FAL_MAX_ATTEMPTS = 2;
+
+// Validate FAL_KEY shape at module-load: fal keys are `<uuid>:<hex>` and
+// MUST never appear in logs. Returns the key only when usable.
+function loadFalKey(): string | null {
+  const raw = Deno.env.get("FAL_KEY");
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  // Loose shape check — must look like "<id>:<secret>", neither part empty.
+  if (!/^[^\s:]+:[^\s:]+$/.test(trimmed)) {
+    console.error("[stitch.fal] FAL_KEY present but malformed (expected '<id>:<secret>'); ignoring");
+    return null;
+  }
+  return trimmed;
+}
+
+// Redact any occurrence of the fal key (or fragments of it) in arbitrary text
+// so we never echo it back through logs, error responses, or DB rows.
+function redact(input: unknown, secret: string | null): string {
+  let s = typeof input === "string" ? input : (() => {
+    try { return JSON.stringify(input); } catch { return String(input); }
+  })();
+  if (secret) {
+    s = s.split(secret).join("[FAL_KEY]");
+    // Also redact each half in case fal echoes only the id or secret half.
+    for (const half of secret.split(":")) {
+      if (half.length >= 8) s = s.split(half).join("[FAL_KEY]");
+    }
+  }
+  // Catch generic `Key xxx` / `Bearer xxx` patterns just in case.
+  s = s.replace(/(Key|Bearer)\s+[A-Za-z0-9_\-:.]+/gi, "$1 [REDACTED]");
+  return s;
+}
 
 interface KieTask {
   sceneId: string;
@@ -46,9 +81,10 @@ serve(async (req) => {
 
   const sbUrl = Deno.env.get("SUPABASE_URL")!;
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const falKey = Deno.env.get("FAL_KEY");
+  const falKey = loadFalKey();
   const shotstackKey = Deno.env.get("SHOTSTACK_API_KEY");
   const sb = createClient(sbUrl, sbKey);
+
 
   try {
     const { adId } = await req.json();
@@ -82,26 +118,37 @@ serve(async (req) => {
 
     const aspect = (ad.aspect_ratio ?? "9:16") as string;
 
-    // === PRIMARY: fal.ai compose ===
+    // === PRIMARY: fal.ai compose (with bounded retries) ===
+    let lastFalDrift: { measured: number | null; delta: number | null } | null = null;
+    let falAttempts = 0;
     if (falKey) {
-      try {
-        const falUrl = await stitchWithFal({
-          falKey, clipPlan, audioUrl, totalDuration, aspect,
-        });
-        if (falUrl) {
-          const drift = await validateDuration(falUrl, totalDuration);
-          if (drift.ok) {
-            console.log(`[stitch] fal OK ad=${adId} drift=${drift.delta}s`);
-            await finalize(sb, ad.id, ad.user_id, falUrl, adCopy, "fal.ai/compose", drift);
-            return json({ success: true, videoUrl: falUrl, via: "fal", drift });
+      for (let attempt = 1; attempt <= FAL_MAX_ATTEMPTS; attempt++) {
+        falAttempts = attempt;
+        try {
+          const falUrl = await stitchWithFal({
+            falKey, clipPlan, audioUrl, totalDuration, aspect,
+          });
+          if (!falUrl) {
+            console.warn(`[stitch] fal attempt=${attempt}/${FAL_MAX_ATTEMPTS} returned no url ad=${adId}`);
+            continue;
           }
-          console.warn(`[stitch] fal drift too large ad=${adId} delta=${drift.delta}s — falling back to Shotstack`);
+          const drift = await validateDuration(falUrl, totalDuration);
+          lastFalDrift = drift;
+          if (drift.ok) {
+            console.log(`[stitch] fal OK ad=${adId} attempt=${attempt} drift=${drift.delta}s`);
+            await finalize(sb, ad.id, ad.user_id, falUrl, adCopy, "fal.ai/compose", drift, {
+              attempts: attempt, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+            });
+            return json({ success: true, videoUrl: falUrl, via: "fal", attempt, drift });
+          }
+          console.warn(`[stitch] fal drift too large ad=${adId} attempt=${attempt} delta=${drift.delta}s tolerance=${DURATION_TOLERANCE_SEC}s — retrying`);
+        } catch (e) {
+          console.error(`[stitch] fal error ad=${adId} attempt=${attempt}:`, redact((e as Error).message, falKey));
         }
-      } catch (e) {
-        console.error(`[stitch] fal error ad=${adId}:`, (e as Error).message);
       }
+      console.warn(`[stitch] fal exhausted ${FAL_MAX_ATTEMPTS} attempts ad=${adId} — falling back to Shotstack`);
     } else {
-      console.warn(`[stitch] FAL_KEY missing — skipping primary stitcher`);
+      console.warn(`[stitch] FAL_KEY missing or malformed — skipping primary stitcher`);
     }
 
     // === FALLBACK: Shotstack ===
@@ -114,24 +161,30 @@ serve(async (req) => {
         if (ssUrl) {
           const drift = await validateDuration(ssUrl, totalDuration);
           console.log(`[stitch] shotstack OK ad=${adId} drift=${drift.delta}s ok=${drift.ok}`);
-          // Even if drift is bad, Shotstack is the last resort — publish but flag.
           await finalize(sb, ad.id, ad.user_id, ssUrl, adCopy,
-            drift.ok ? "shotstack" : "shotstack_with_drift", drift);
+            drift.ok ? "shotstack" : "shotstack_with_drift", drift, {
+              attempts: 1, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+              falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
+            });
           return json({ success: true, videoUrl: ssUrl, via: "shotstack", drift });
         }
       } catch (e) {
-        console.error(`[stitch] shotstack error ad=${adId}:`, (e as Error).message);
+        console.error(`[stitch] shotstack error ad=${adId}:`, redact((e as Error).message, falKey));
       }
     }
 
     // === LAST RESORT: publish first clip so credit isn't wasted ===
     const firstUrl = ready[0].videoUrl!;
     console.warn(`[stitch] all stitchers failed ad=${adId} — publishing first clip`);
-    await finalize(sb, ad.id, ad.user_id, firstUrl, adCopy, "first_clip_fallback", null);
+    await finalize(sb, ad.id, ad.user_id, firstUrl, adCopy, "first_clip_fallback", null, {
+      attempts: 0, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+      falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
+    });
     return json({ success: true, videoUrl: firstUrl, via: "first_clip" });
   } catch (e) {
-    console.error("[stitch-lyric-video] fatal:", e);
-    return json({ error: e instanceof Error ? e.message : "Unknown" }, 500);
+    const safe = redact(e instanceof Error ? e.message : "Unknown", falKey);
+    console.error("[stitch-lyric-video] fatal:", safe);
+    return json({ error: safe }, 500);
   }
 
   function json(body: unknown, status = 200) {
@@ -194,14 +247,14 @@ async function stitchWithFal(opts: {
     body: JSON.stringify({ tracks, output_format: "mp4" }),
   });
   if (!submitRes.ok) {
-    console.error(`[stitch.fal] submit failed ${submitRes.status} ${await submitRes.text()}`);
+    console.error(`[stitch.fal] submit failed ${submitRes.status} ${redact(await submitRes.text(), falKey)}`);
     return null;
   }
   const submitJson = await submitRes.json();
   const statusUrl: string | undefined = submitJson.status_url;
   const responseUrl: string | undefined = submitJson.response_url;
   if (!statusUrl || !responseUrl) {
-    console.error(`[stitch.fal] no status/response URLs:`, submitJson);
+    console.error(`[stitch.fal] no status/response URLs:`, redact(submitJson, falKey));
     return null;
   }
 
@@ -216,7 +269,7 @@ async function stitchWithFal(opts: {
     const status = (j.status ?? "").toUpperCase();
     if (status === "COMPLETED") break;
     if (status === "FAILED" || status === "ERROR") {
-      console.error(`[stitch.fal] job failed:`, j);
+      console.error(`[stitch.fal] job failed:`, redact(j, falKey));
       return null;
     }
   }
@@ -231,7 +284,7 @@ async function stitchWithFal(opts: {
   const out = await rr.json();
   const videoUrl: string | undefined = out?.video_url ?? out?.video?.url ?? out?.output?.url;
   if (!videoUrl) {
-    console.error(`[stitch.fal] no video_url in response:`, out);
+    console.error(`[stitch.fal] no video_url in response:`, redact(out, falKey));
     return null;
   }
   return videoUrl;
@@ -396,6 +449,13 @@ async function finalize(
   adCopy: Record<string, any>,
   via: string,
   drift: { measured: number | null; delta: number | null } | null,
+  meta?: {
+    attempts?: number;
+    tolerance?: number;
+    requested?: number;
+    falAttempts?: number;
+    falLastDriftSec?: number | null;
+  },
 ) {
   await sb.from("generated_ads").update({
     status: "completed",
@@ -407,10 +467,19 @@ async function finalize(
       ...adCopy,
       pipelineStage: "done",
       stitchedBy: via,
-      stitchValidation: drift ? {
-        measuredDurationSec: drift.measured,
-        driftSec: drift.delta,
-      } : null,
+      stitchValidation: {
+        stitcher: via,
+        requestedDurationSec: meta?.requested ?? null,
+        measuredDurationSec: drift?.measured ?? null,
+        driftSec: drift?.delta ?? null,
+        toleranceSec: meta?.tolerance ?? null,
+        withinTolerance: drift ? (drift.delta != null && meta?.tolerance != null
+          ? drift.delta <= meta.tolerance : null) : null,
+        attempts: meta?.attempts ?? null,
+        falAttempts: meta?.falAttempts ?? null,
+        falLastDriftSec: meta?.falLastDriftSec ?? null,
+        validatedAt: new Date().toISOString(),
+      },
     },
   }).eq("id", adId);
   try {
