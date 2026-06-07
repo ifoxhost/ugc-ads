@@ -76,8 +76,10 @@ async function runScript(adId: string, opts: {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) throw new Error("OPENAI_API_KEY missing");
 
-  const system = `You are a music-video director. Given lyrics and direction, return a JSON shot list of 4-${MAX_SCENES} scenes, each with start_sec, end_sec, lyric_lines (array), and prompt {story, camera, environment, colorGrading, vfx}. Total duration ~${opts.duration}s. Respond ONLY with JSON: {"scenes":[...]}.`;
+  const targetScenes = planSceneCount(opts.duration);
+  const system = `You are a music-video director. Given lyrics and direction, return a JSON shot list of EXACTLY ${targetScenes} scenes that together span the FULL ${opts.duration}s of the song. Each scene must have start_sec, end_sec, lyric_lines (array), and prompt {story, camera, environment, colorGrading, vfx}. Distribute timings evenly across the song. Respond ONLY with JSON: {"scenes":[...]}.`;
   const user = `Song: "${opts.songTitle}" by ${opts.artist || "Unknown"}
+Total duration: ${opts.duration}s
 Lyrics:
 ${opts.lyrics}
 
@@ -106,11 +108,15 @@ Direction:
   const json = await res.json();
   const content = json.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(content);
-  const scenes: SceneSpec[] = (parsed.scenes ?? []).slice(0, MAX_SCENES).map((s: any, i: number) => ({
+  const raw = (parsed.scenes ?? []).slice(0, targetScenes);
+  // Enforce evenly spaced timings spanning the full song duration so the
+  // final stitched video always matches the imported audio length.
+  const segLen = (opts.duration || 60) / Math.max(1, raw.length);
+  const scenes: SceneSpec[] = raw.map((s: any, i: number) => ({
     index: i,
     lyric_lines: Array.isArray(s.lyric_lines) ? s.lyric_lines : [],
-    start_sec: Number(s.start_sec ?? 0),
-    end_sec: Number(s.end_sec ?? 0),
+    start_sec: Math.round(i * segLen * 100) / 100,
+    end_sec: Math.round((i + 1) * segLen * 100) / 100,
     prompt: {
       story: String(s.prompt?.story ?? ""),
       camera: String(s.prompt?.camera ?? ""),
