@@ -124,6 +124,22 @@ export default function StoryboardStage({ adId, onClose }: Props) {
     }
   };
 
+  const handleRetryAllFailed = async () => {
+    setRetryFailedLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("retry-failed-scenes", { body: { adId } });
+      if (error) throw error;
+      const n = (data as any)?.count ?? 0;
+      if (n === 0) toast.info("No failed scenes to retry.");
+      else toast.success(`Re-queued ${n} failed scene${n === 1 ? "" : "s"}…`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to retry scenes");
+    } finally {
+      setRetryFailedLoading(false);
+    }
+  };
+
+
   const handleRender = async () => {
     setRendering(true);
     try {
