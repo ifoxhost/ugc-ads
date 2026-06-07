@@ -448,7 +448,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                 );
 
               return (
-                <Card key={scene.id} className="overflow-hidden">
+                <Card key={scene.id} className={`overflow-hidden ${scene.locked ? "border-amber-500/40 bg-amber-500/5" : ""}`}>
                   <CardContent className="p-4 grid md:grid-cols-[260px_1fr] gap-4">
                     {/* Image */}
                     <div className="space-y-2">
