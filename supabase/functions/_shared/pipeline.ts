@@ -304,7 +304,7 @@ export async function persistReferenceImages(
       });
       if (error) { console.warn("[refs] upload failed", error.message); continue; }
       const { data: pub } = sb.storage.from("video-references").getPublicUrl(path);
-      out.push(pub.publicUrl);
+      out.push(`${pub.publicUrl}?v=${Date.now()}`);
     } catch (e) {
       console.warn("[refs] mirror error", (e as Error).message);
     }
