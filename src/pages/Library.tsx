@@ -2421,8 +2421,8 @@ const Library = () => {
                 )}
               </div>
 
-              {/* Expiry countdown — top-right under the selection checkbox */}
-              {hasVideo && isCompleted && (() => {
+              {/* Expiry countdown — top-right under the selection checkbox (videos AND images) */}
+              {isCompleted && (() => {
                 const expiryInfo = getVideoExpiryInfo(ad.completed_at);
                 if (!expiryInfo) return null;
                 return (
@@ -2452,7 +2452,16 @@ const Library = () => {
 
               {/* Quick Actions */}
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                {isLyric && (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8"
+                  title="View"
+                  onClick={(e) => { e.stopPropagation(); handleThumbnailClick(); }}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                {hasVideo && (
                   <Button
                     size="icon"
                     variant="secondary"
@@ -2481,6 +2490,7 @@ const Library = () => {
                   size="icon"
                   variant="secondary"
                   className="h-8 w-8"
+                  title="Download / export"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (isLyric && hasVideo) {
@@ -2498,6 +2508,7 @@ const Library = () => {
                   size="icon"
                   variant="destructive"
                   className="h-8 w-8"
+                  title="Delete"
                   onClick={(e) => {
                     e.stopPropagation();
                     confirmSingleDelete(ad.id);
