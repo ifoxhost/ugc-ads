@@ -327,6 +327,7 @@ const Library = () => {
 
   // Track which ad IDs were "processing" so we can detect transitions → completed
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
+  const prevSlicePhaseRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetchAds();
