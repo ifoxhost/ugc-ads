@@ -1800,27 +1800,29 @@ const Library = () => {
                                     variant="ghost"
                                     className="h-7 px-2 text-[10px]"
                                     title="Copy start (seconds)"
-                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} start`, startStr)}
+                                    onClick={() => copySliceField(startStr, `Scene ${Number(sl.index ?? 0) + 1} start`, `start-${sl.sceneId}`)}
                                   >
-                                    <Clock className="h-3 w-3 mr-1" />start
+                                    {copiedSliceKey === `start-${sl.sceneId}` ? <Check className="h-3 w-3 mr-1 text-primary" /> : <Clock className="h-3 w-3 mr-1" />}
+                                    start
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 px-2 text-[10px]"
                                     title="Copy duration (seconds)"
-                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} duration`, durStr)}
+                                    onClick={() => copySliceField(durStr, `Scene ${Number(sl.index ?? 0) + 1} duration`, `dur-${sl.sceneId}`)}
                                   >
-                                    <Clock className="h-3 w-3 mr-1" />dur
+                                    {copiedSliceKey === `dur-${sl.sceneId}` ? <Check className="h-3 w-3 mr-1 text-primary" /> : <Clock className="h-3 w-3 mr-1" />}
+                                    dur
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 px-2"
                                     title="Copy slice URL"
-                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} URL`, sl.url)}
+                                    onClick={() => copySliceField(sl.url, `Scene ${Number(sl.index ?? 0) + 1} URL`, `url-${sl.sceneId}`)}
                                   >
-                                    <Copy className="h-3 w-3" />
+                                    {copiedSliceKey === `url-${sl.sceneId}` ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
                                   </Button>
                                   <Button
                                     size="sm"
@@ -1829,7 +1831,8 @@ const Library = () => {
                                     title="Copy {startSec, durationSec, url} as JSON"
                                     onClick={() => copyMeta(sl)}
                                   >
-                                    JSON
+                                    {copiedSliceKey === `json-${sl.sceneId}` ? <Check className="h-3 w-3 mr-1 text-primary" /> : null}
+                                    {copiedSliceKey === `json-${sl.sceneId}` ? "Copied!" : "JSON"}
                                   </Button>
                                   <Button
                                     size="sm"
