@@ -17,6 +17,7 @@ import {
 import {
   validateSeedanceAudioRefs,
   SeedanceAudioRefError,
+  validateJobSeedanceAudioRefs,
 } from "../_shared/pipeline.ts";
 
 const corsHeaders = {
