@@ -343,34 +343,46 @@ async function generateSceneImage(args: {
     userContent.push({ type: "image_url", image_url: { url } });
   }
 
-  // Nano Banana occasionally returns an empty image payload (safety filter
-  // hits, transient model errors). Retry a few times with backoff before
-  // surfacing the failure to the caller.
-  const MAX_ATTEMPTS = 3;
+  // Try Nano Banana 2 (gemini-3.1-flash-image-preview, pro-level quality)
+  // first. Fall back to the original Nano Banana (gemini-2.5-flash-image) if
+  // the new model is unavailable, rate-limited, or returns an empty payload.
+  // Each model gets a couple of retries with backoff before falling through.
+  const MODELS: Array<{ id: string; label: string }> = [
+    { id: "google/gemini-3.1-flash-image-preview", label: "Nano Banana 2" },
+    { id: "google/gemini-2.5-flash-image", label: "Nano Banana" },
+  ];
+  const ATTEMPTS_PER_MODEL = 2;
   let b64: string | undefined;
   let lastErr = "";
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const res = await fetch(`${LOVABLE_AI_API}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        modalities: ["image", "text"],
-        messages: [{ role: "user", content: userContent }],
-      }),
-    });
-    if (!res.ok) {
-      lastErr = `Nano Banana failed: ${res.status} ${await res.text()}`;
-    } else {
-      const json = await res.json();
-      b64 =
-        json?.choices?.[0]?.message?.images?.[0]?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "") ??
-        json?.choices?.[0]?.message?.content?.match(/data:image\/\w+;base64,([^"'\s)]+)/)?.[1];
-      if (b64) break;
-      lastErr = "Nano Banana returned no image";
-    }
-    if (attempt < MAX_ATTEMPTS) {
-      await new Promise((r) => setTimeout(r, 800 * attempt)); // 0.8s, 1.6s
+  outer: for (const model of MODELS) {
+    for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL; attempt++) {
+      const res = await fetch(`${LOVABLE_AI_API}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
+        body: JSON.stringify({
+          model: model.id,
+          modalities: ["image", "text"],
+          messages: [{ role: "user", content: userContent }],
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        lastErr = `${model.label} failed: ${res.status} ${body}`;
+        console.warn(`[nano-banana] ${lastErr}`);
+        // 402 (credits) / 429 (rate limit) — fall through to fallback model immediately.
+        if (res.status === 402 || res.status === 429) continue outer;
+      } else {
+        const json = await res.json();
+        b64 =
+          json?.choices?.[0]?.message?.images?.[0]?.image_url?.url?.replace(/^data:image\/\w+;base64,/, "") ??
+          json?.choices?.[0]?.message?.content?.match(/data:image\/\w+;base64,([^"'\s)]+)/)?.[1];
+        if (b64) { console.log(`[nano-banana] success via ${model.label}`); break outer; }
+        lastErr = `${model.label} returned no image`;
+        console.warn(`[nano-banana] ${lastErr}`);
+      }
+      if (attempt < ATTEMPTS_PER_MODEL) {
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+      }
     }
   }
   if (!b64) throw new Error(lastErr || "Nano Banana returned no image");
