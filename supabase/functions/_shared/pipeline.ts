@@ -494,6 +494,59 @@ export async function regenerateAllScenes(opts: { adId: string; userId: string }
   return { count };
 }
 
+// ── Re-roll ONLY failed scenes for an ad ───────────────────────────────────
+export async function regenerateFailedScenes(opts: { adId: string; userId: string }): Promise<{ count: number }> {
+  const sb = service();
+  const { data: ad } = await sb.from("generated_ads")
+    .select("id, user_id, ad_copy, product_image_url").eq("id", opts.adId).maybeSingle();
+  if (!ad) throw new Error("Ad not found");
+  if (ad.user_id !== opts.userId) throw new Error("Forbidden");
+
+  const adCopy = (ad.ad_copy ?? {}) as Record<string, unknown>;
+  const songTitle = String(adCopy.title ?? "Untitled");
+  const referenceImageUrls = resolveAdReferences(adCopy, ad.product_image_url ?? null);
+
+  const { data: failed } = await sb.from("video_scenes")
+    .select("id, prompt, regen_count")
+    .eq("ad_id", opts.adId)
+    .eq("image_status", "failed");
+  const count = failed?.length ?? 0;
+  if (count === 0) return { count: 0 };
+
+  const failedIds = (failed ?? []).map((f: any) => f.id);
+  await sb.from("video_scenes").update({
+    image_status: "pending", error_message: null, failed_step: null,
+  }).in("id", failedIds);
+
+  // @ts-ignore Deno
+  EdgeRuntime.waitUntil((async () => {
+    for (const s of failed ?? []) {
+      try {
+        await sb.from("video_scenes").update({ image_status: "generating" }).eq("id", s.id);
+        const { url } = await generateSceneImage({
+          sceneId: s.id,
+          prompt: s.prompt as SceneSpec["prompt"],
+          referenceImageUrls,
+          songTitle,
+          userId: opts.userId,
+        });
+        await sb.from("video_scenes").update({
+          image_url: url, image_status: "ready", regen_count: (s.regen_count ?? 0) + 1,
+        }).eq("id", s.id);
+      } catch (e) {
+        await sb.from("video_scenes").update({
+          image_status: "failed",
+          error_message: (e as Error).message.slice(0, 500),
+          failed_step: "nano-banana",
+        }).eq("id", s.id);
+      }
+    }
+  })());
+
+  return { count };
+}
+
+
 // ── Kie.ai render submit + poll helpers (used by render & poll functions) ───
 const KIE_MODELS: Record<string, { id: string; endpoint: string }> = {
   kling: { id: "kling-3.0", endpoint: `${KIE_AI_API}/kling/generate` },
