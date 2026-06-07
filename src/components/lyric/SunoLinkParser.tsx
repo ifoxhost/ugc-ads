@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Music, Check, AlertCircle, Link, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface ParsedSongData {
   title: string;
@@ -11,8 +12,6 @@ export interface ParsedSongData {
   audioUrl?: string;
   success: boolean;
 }
-
-const BACKEND_URL = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000` : 'http://localhost:3000';
 
 interface SunoLinkParserProps {
   onParsed: (data: ParsedSongData) => void;
