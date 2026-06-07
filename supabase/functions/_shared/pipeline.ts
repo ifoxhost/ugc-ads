@@ -678,6 +678,97 @@ export function validateSeedanceAudioRefs(
   if (errs.length > 0) throw new SeedanceAudioRefError(errs);
 }
 
+/**
+ * Job-level validator for an entire render job's reference audio slices.
+ * Returns a structured per-scene payload (never throws) shaped for direct
+ * consumption by the UI panel. Enforces:
+ *   - max 3 reference files per job
+ *   - max 15s total reference audio per job
+ *   - max 15s per individual slice
+ */
+export interface JobSliceInput {
+  sceneId: string;
+  index: number;
+  url: string;
+  startSec: number;
+  durationSec: number;
+}
+export interface JobSliceError {
+  sceneId: string;
+  index: number;
+  reason: string;
+  durationSec: number;
+  scope: "scene" | "job";
+}
+export interface JobSliceValidation {
+  valid: boolean;
+  totalFiles: number;
+  totalDurationSec: number;
+  limits: { maxFiles: number; maxTotalSec: number; maxPerSliceSec: number };
+  errors: JobSliceError[];
+}
+
+export function validateJobSeedanceAudioRefs(
+  slices: JobSliceInput[],
+): JobSliceValidation {
+  const limits = { maxFiles: 3, maxTotalSec: 15, maxPerSliceSec: 15 };
+  const errors: JobSliceError[] = [];
+  const totalFiles = slices.length;
+  let totalDurationSec = 0;
+
+  for (const s of slices) {
+    const d = Number(s.durationSec) || 0;
+    totalDurationSec += d;
+    if (d > limits.maxPerSliceSec + 0.05) {
+      errors.push({
+        sceneId: s.sceneId,
+        index: s.index,
+        durationSec: d,
+        scope: "scene",
+        reason: `Scene ${s.index + 1} slice ${d.toFixed(2)}s exceeds ${limits.maxPerSliceSec}s cap`,
+      });
+    }
+    if (typeof s.url !== "string" || !/^https?:\/\//i.test(s.url)) {
+      errors.push({
+        sceneId: s.sceneId,
+        index: s.index,
+        durationSec: d,
+        scope: "scene",
+        reason: `Scene ${s.index + 1} slice URL is invalid`,
+      });
+    }
+  }
+
+  if (totalFiles > limits.maxFiles) {
+    errors.push({
+      sceneId: "",
+      index: -1,
+      durationSec: 0,
+      scope: "job",
+      reason: `Job has ${totalFiles} reference files (max ${limits.maxFiles})`,
+    });
+  }
+  if (totalDurationSec > limits.maxTotalSec + 0.05) {
+    errors.push({
+      sceneId: "",
+      index: -1,
+      durationSec: totalDurationSec,
+      scope: "job",
+      reason: `Job total reference audio ${totalDurationSec.toFixed(2)}s exceeds ${limits.maxTotalSec}s cap`,
+    });
+  }
+
+  return {
+    valid: errors.length === 0,
+    totalFiles,
+    totalDurationSec: Math.round(totalDurationSec * 100) / 100,
+    limits,
+    errors,
+  };
+}
+
+
+
 
 /**
  * Submit ONE Kie.ai clip per scene with `sound: false` (Kling) or
