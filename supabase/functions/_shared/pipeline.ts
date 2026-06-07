@@ -77,54 +77,99 @@ async function runScript(adId: string, opts: {
   if (!key) throw new Error("OPENAI_API_KEY missing");
 
   const targetScenes = planSceneCount(opts.duration);
-  const system = `You are a music-video director. Given lyrics and direction, return a JSON shot list of EXACTLY ${targetScenes} scenes that together span the FULL ${opts.duration}s of the song. Each scene must have start_sec, end_sec, lyric_lines (array), and prompt {story, camera, environment, colorGrading, vfx}. Distribute timings evenly across the song. Respond ONLY with JSON: {"scenes":[...]}.`;
+
+  // Only include direction fields the user actually supplied — anything
+  // missing is treated as creative latitude for the model, not a constraint.
+  const directionPairs: Array<[string, string | undefined]> = [
+    ["Story", opts.storyDescription],
+    ["Camera", opts.cameraInstructions],
+    ["Environment", opts.environmentInstructions],
+    ["Color grading", opts.colorGradingInstructions],
+    ["VFX", opts.visualEffectsInstructions],
+    ["Character", opts.characterInstructions],
+  ];
+  const directionLines = directionPairs
+    .filter(([, v]) => typeof v === "string" && v.trim().length > 0)
+    .map(([k, v]) => `- ${k}: ${v!.trim()}`);
+  const directionBlock = directionLines.length
+    ? `Direction (treat as guidance, not strict rules):\n${directionLines.join("\n")}`
+    : "Direction: none provided — invent a cohesive visual concept that fits the song's title, artist, and lyrics.";
+
+  const lyricsBlock = (opts.lyrics || "").trim().length
+    ? opts.lyrics
+    : "(no lyrics provided — base the scenes on the song title and mood)";
+
+  const system = `You are a music-video director. Return a JSON shot list of EXACTLY ${targetScenes} scenes that together span the FULL ${opts.duration}s of the song. Every scene MUST include start_sec, end_sec, lyric_lines (array, may be empty), and prompt {story, camera, environment, colorGrading, vfx}. All five prompt fields are REQUIRED strings — if the user did not give direction for a field, invent a sensible, on-brand description yourself (never leave it blank, never refuse). Distribute timings evenly across the song. If the lyrics are short, repetitive, or nonsense, still produce ${targetScenes} visually distinct scenes inspired by the title/mood. Respond ONLY with JSON: {"scenes":[...]}.`;
   const user = `Song: "${opts.songTitle}" by ${opts.artist || "Unknown"}
 Total duration: ${opts.duration}s
 Lyrics:
-${opts.lyrics}
+${lyricsBlock}
 
-Direction:
-- Story: ${opts.storyDescription || "—"}
-- Camera: ${opts.cameraInstructions || "—"}
-- Environment: ${opts.environmentInstructions || "—"}
-- Color grading: ${opts.colorGradingInstructions || "—"}
-- VFX: ${opts.visualEffectsInstructions || "—"}
-- Character: ${opts.characterInstructions || "—"}`;
+${directionBlock}`;
 
-  const res = await fetch(`${OPENAI_API}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      temperature: 0.7,
-    }),
-  });
-  if (!res.ok) throw new Error(`OpenAI script failed: ${res.status} ${await res.text()}`);
-  const json = await res.json();
-  const content = json.choices?.[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(content);
-  const raw = (parsed.scenes ?? []).slice(0, targetScenes);
+  async function callOpenAI(temp: number): Promise<any[]> {
+    const res = await fetch(`${OPENAI_API}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature: temp,
+      }),
+    });
+    if (!res.ok) throw new Error(`OpenAI script failed: ${res.status} ${await res.text()}`);
+    const json = await res.json();
+    const content = json.choices?.[0]?.message?.content ?? "{}";
+    let parsed: any = {};
+    try { parsed = JSON.parse(content); } catch { parsed = {}; }
+    return Array.isArray(parsed.scenes) ? parsed.scenes : [];
+  }
+
+  // Try twice with slightly different temperatures before falling back.
+  let raw: any[] = [];
+  try { raw = await callOpenAI(0.7); } catch (e) { console.warn("[script] first call failed:", (e as Error).message); }
+  if (!raw.length) {
+    try { raw = await callOpenAI(0.9); } catch (e) { console.warn("[script] retry failed:", (e as Error).message); }
+  }
+  // Last-resort fallback: synthesize generic scenes so the pipeline keeps moving.
+  if (!raw.length) {
+    console.warn("[script] OpenAI returned no scenes — synthesizing fallback scenes");
+    raw = Array.from({ length: targetScenes }, (_, i) => ({
+      lyric_lines: [],
+      prompt: {
+        story: `Scene ${i + 1} for "${opts.songTitle}" — evocative imagery matching the song's mood.`,
+        camera: "Slow cinematic push-in, shallow depth of field.",
+        environment: "Atmospheric setting that complements the track.",
+        colorGrading: "Rich, filmic color palette with deep contrast.",
+        vfx: "Subtle particle and light effects for ambience.",
+      },
+    }));
+  }
+  raw = raw.slice(0, targetScenes);
   // Enforce evenly spaced timings spanning the full song duration so the
   // final stitched video always matches the imported audio length.
   const segLen = (opts.duration || 60) / Math.max(1, raw.length);
-  const scenes: SceneSpec[] = raw.map((s: any, i: number) => ({
-    index: i,
-    lyric_lines: Array.isArray(s.lyric_lines) ? s.lyric_lines : [],
-    start_sec: Math.round(i * segLen * 100) / 100,
-    end_sec: Math.round((i + 1) * segLen * 100) / 100,
-    prompt: {
-      story: String(s.prompt?.story ?? ""),
-      camera: String(s.prompt?.camera ?? ""),
-      environment: String(s.prompt?.environment ?? ""),
-      colorGrading: String(s.prompt?.colorGrading ?? ""),
-      vfx: String(s.prompt?.vfx ?? ""),
-    },
-  }));
+  const scenes: SceneSpec[] = raw.map((s: any, i: number) => {
+    const p = s.prompt ?? {};
+    const story = String(p.story ?? "").trim() || `Scene ${i + 1} for "${opts.songTitle}" — evocative imagery matching the song's mood.`;
+    return {
+      index: i,
+      lyric_lines: Array.isArray(s.lyric_lines) ? s.lyric_lines : [],
+      start_sec: Math.round(i * segLen * 100) / 100,
+      end_sec: Math.round((i + 1) * segLen * 100) / 100,
+      prompt: {
+        story,
+        camera: String(p.camera ?? "").trim() || "Slow cinematic push-in, shallow depth of field.",
+        environment: String(p.environment ?? "").trim() || "Atmospheric setting that complements the track.",
+        colorGrading: String(p.colorGrading ?? "").trim() || "Rich, filmic color palette with deep contrast.",
+        vfx: String(p.vfx ?? "").trim() || "Subtle particle and light effects for ambience.",
+      },
+    };
+  });
   if (scenes.length === 0) throw new Error("Script returned no scenes");
 
   const sb = service();
