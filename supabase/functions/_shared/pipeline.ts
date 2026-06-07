@@ -619,6 +619,67 @@ export interface KieClipSpec {
 }
 
 /**
+ * Strict validation for Seedance 2.0 `reference_audio_urls`:
+ *   - kie.ai caps at 3 files per clip
+ *   - each file must be ≤15 s
+ *   - total length across files must also be ≤15 s
+ * Throws a SeedanceAudioRefError with a structured `.details` array so the
+ * caller can surface per-violation messages. Pass `urls` plus optional
+ * `durationsSec` (when known); if a duration is unknown for a given URL we
+ * skip the per-file / total-length checks for it.
+ */
+export class SeedanceAudioRefError extends Error {
+  details: Array<{ index: number; url: string; reason: string }>;
+  constructor(details: Array<{ index: number; url: string; reason: string }>) {
+    super(`Seedance reference_audio_urls invalid: ${details.map((d) => d.reason).join("; ")}`);
+    this.details = details;
+    this.name = "SeedanceAudioRefError";
+  }
+}
+
+export function validateSeedanceAudioRefs(
+  urls: string[] | undefined,
+  durationsSec?: number[],
+): void {
+  if (!urls || urls.length === 0) return; // optional field
+  const errs: Array<{ index: number; url: string; reason: string }> = [];
+
+  if (urls.length > 3) {
+    errs.push({
+      index: -1,
+      url: "",
+      reason: `Max 3 reference_audio_urls per Seedance clip (got ${urls.length})`,
+    });
+  }
+
+  let total = 0;
+  urls.forEach((u, i) => {
+    if (typeof u !== "string" || !/^https?:\/\//i.test(u)) {
+      errs.push({ index: i, url: String(u), reason: `Entry ${i} is not an http(s) URL` });
+      return;
+    }
+    const d = durationsSec?.[i];
+    if (typeof d === "number" && Number.isFinite(d)) {
+      if (d > 15) {
+        errs.push({ index: i, url: u, reason: `Entry ${i} duration ${d.toFixed(2)}s exceeds 15s cap` });
+      }
+      total += d;
+    }
+  });
+
+  if (durationsSec && total > 15.05) {
+    errs.push({
+      index: -1,
+      url: "",
+      reason: `Sum of reference_audio_urls (${total.toFixed(2)}s) exceeds 15s cap`,
+    });
+  }
+
+  if (errs.length > 0) throw new SeedanceAudioRefError(errs);
+}
+
+
+/**
  * Submit ONE Kie.ai clip per scene with `sound: false` (Kling) or
  * `generate_audio: false` (Seedance). The imported song is muxed back in
  * by `stitch-lyric-video` after every clip finishes. Returns the Kie task
