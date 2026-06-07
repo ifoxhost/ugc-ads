@@ -414,7 +414,7 @@ const mockSupabase = {
           additional_character_images: body.additionalCharacterImages ?? [],
           aspect_ratio: body.aspectRatio || "16:9",
           video_model: body.aiModel || "kling",
-          image_model: body.aiImageModel || "imagen-3",
+          image_model: body.aiImageModel || "nano-banana",
           quality: body.quality || "high",
           fps: body.fps || 30,
           duration: body.duration || 60,
