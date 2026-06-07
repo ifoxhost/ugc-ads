@@ -49,7 +49,7 @@ serve(async (req) => {
       pexelsBackgroundUrls = null, // optional array of selected pexels stills/videos
       referenceImageUrl = null, referenceImageName = null,
       referenceImageUrls = null,   // optional array of uploaded ref image URLs
-      aiModel = "kling", aiImageModel = "nano-banana",
+      aiModel = "seedance", aiImageModel = "nano-banana",
       resolution = "1080p",
       audioFileUrl = null, audioUrl = null,
       duration = 60,
@@ -72,7 +72,7 @@ serve(async (req) => {
     const kieModel = getKieModel(aiModel);
     if (!kieModel) {
       return new Response(JSON.stringify({
-        error: `Video model "${aiModel}" is not supported. Allowed: kling, veo (Kie.ai)`,
+        error: `Video model "${aiModel}" is not supported. Allowed: seedance, seedance-pro, kling, veo (Kie.ai)`,
       }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
