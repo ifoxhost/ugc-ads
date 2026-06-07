@@ -15,6 +15,32 @@ import { useToast } from "@/hooks/use-toast";
 import { toast as sonner } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StoryboardManager from "@/components/lyric/StoryboardManager";
+import { parseISO, differenceInDays, differenceInHours } from "date-fns";
+
+// Format a duration in seconds → "m:ss" / "h:mm:ss" (mirrors OutputGallery card).
+const formatVideoDuration = (seconds: number | null | undefined): string | null => {
+  if (!seconds || seconds <= 0) return null;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hours > 0) return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  return `${minutes}:${secs.toString().padStart(2, "0")}`;
+};
+
+// 14-day retention countdown (mirrors OutputGallery card).
+const getVideoExpiryInfo = (completedAt: string | null | undefined) => {
+  if (!completedAt) return null;
+  try {
+    const completedDate = parseISO(completedAt);
+    const expiryDate = new Date(completedDate);
+    expiryDate.setDate(expiryDate.getDate() + 14);
+    const now = new Date();
+    const daysLeft = differenceInDays(expiryDate, now);
+    const hoursLeft = differenceInHours(expiryDate, now) % 24;
+    if (daysLeft < 0) return { daysLeft: 0, hoursLeft: 0, isExpiringSoon: true };
+    return { daysLeft, hoursLeft, isExpiringSoon: daysLeft <= 3 };
+  } catch { return null; }
+};
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -137,6 +163,7 @@ interface GeneratedAd {
   completed_at: string | null;
   email: string;
   prompt_used: string | null;
+  video_duration?: number | null;
 }
 
 /** Returns true if this is a SongDoe music video record */
@@ -2194,6 +2221,11 @@ const Library = () => {
                   src={ad.generated_video_url!}
                   className="w-full h-full object-cover"
                   muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}); }}
+                  onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                 />
               ) : (
                 <img 
@@ -2269,6 +2301,35 @@ const Library = () => {
                   </Badge>
                 )}
               </div>
+
+              {/* Expiry countdown — top-right under the selection checkbox */}
+              {hasVideo && isCompleted && (() => {
+                const expiryInfo = getVideoExpiryInfo(ad.completed_at);
+                if (!expiryInfo) return null;
+                return (
+                  <div className={cn(
+                    "absolute top-10 right-2 px-2 py-1 rounded-md text-[10px] font-medium flex items-center gap-1",
+                    expiryInfo.isExpiringSoon
+                      ? "bg-destructive/90 text-destructive-foreground"
+                      : "bg-black/60 text-white"
+                  )}>
+                    <Clock className="h-3 w-3" />
+                    {expiryInfo.daysLeft > 0
+                      ? `${expiryInfo.daysLeft}d left`
+                      : expiryInfo.hoursLeft > 0
+                        ? `${expiryInfo.hoursLeft}h left`
+                        : "Expiring soon"}
+                  </div>
+                );
+              })()}
+
+              {/* Video duration badge — bottom-left */}
+              {hasVideo && ad.video_duration && (
+                <div className="absolute bottom-2 left-2 px-2 py-1 rounded-md text-[10px] font-medium bg-black/70 text-white">
+                  {formatVideoDuration(ad.video_duration)}
+                </div>
+              )}
+
 
               {/* Quick Actions */}
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
