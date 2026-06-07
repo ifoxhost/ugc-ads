@@ -77,7 +77,7 @@ const Home = () => {
     <div className="scroll-snap-container">
 
       {/* ─── Hero Section ─── */}
-      <section className="scroll-snap-section relative h-screen flex items-center justify-center overflow-hidden">
+      <section className="scroll-snap-section relative h-screen flex items-center justify-center overflow-hidden pt-20 sm:pt-24">
 
         {/* Auto-scrolling background carousel */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none select-none">
