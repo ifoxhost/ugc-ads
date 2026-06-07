@@ -242,14 +242,14 @@ export default function StoryboardStage({ adId, onClose }: Props) {
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
           <Button
             variant="outline" size="sm"
-            disabled={regenAllLoading || scenes.length === 0 || stage === "rendering"}
+            disabled={showRegenAllBusy || scenes.length === 0 || stage === "rendering"}
             onClick={handleRegenAll}>
-            {regenAllLoading ? (
+            {showRegenAllBusy ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
             ) : (
               <RefreshCw className="w-4 h-4 mr-1" />
             )}
-            Re-roll all
+            {showRegenAllBusy ? "Re-rolling…" : "Re-roll all"}
           </Button>
           {ad?.generated_video_url ? (
             <Button asChild size="sm">
