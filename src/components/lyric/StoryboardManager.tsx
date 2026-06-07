@@ -36,6 +36,7 @@ type Scene = {
   prompt: ScenePromptFields & Record<string, unknown>;
   error_message?: string | null;
   regen_count?: number;
+  locked: boolean;
 };
 
 const TERMINAL_VIDEO_STATUSES = new Set(["completed", "failed"]);
