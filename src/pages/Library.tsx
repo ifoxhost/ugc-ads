@@ -313,6 +313,16 @@ const Library = () => {
     setMediaViewer({ isOpen: false, type: null, url: null, title: null, ad: null });
   };
 
+  // Keep the open job-details ad in sync with realtime updates (so the
+  // Re-slice audio status panel re-renders as ad_copy.sliceStatus changes).
+  useEffect(() => {
+    if (!mediaViewer.isOpen || !mediaViewer.ad) return;
+    const fresh = ads.find(a => a.id === mediaViewer.ad!.id);
+    if (fresh && fresh !== mediaViewer.ad) {
+      setMediaViewer(mv => mv.ad ? { ...mv, ad: fresh } : mv);
+    }
+  }, [ads, mediaViewer.isOpen, mediaViewer.ad]);
+
   // Track which ad IDs were "processing" so we can detect transitions → completed
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
 
