@@ -367,7 +367,9 @@ const Library = () => {
 
   // Track which ad IDs were "processing" so we can detect transitions → completed
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
-  const prevSlicePhaseRef = useRef<string | null>(null);
+  // Last-seen slice phase per ad-id — prevents duplicate transition toasts.
+  const lastSlicePhaseByAdRef = useRef<Map<string, string | null>>(new Map());
+
 
   useEffect(() => {
     fetchAds();
