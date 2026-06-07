@@ -211,16 +211,62 @@ async function runTranscription(adId: string, audioUrl: string | null): Promise<
   return null;
 }
 
+// ── Helper: persist external/temp reference images into our bucket ─────────
+// Pexels/uploaded blob/temp URLs are mirrored into `video-references` so we
+// keep permanent public URLs even if the source expires.
+export async function persistReferenceImages(
+  userId: string,
+  adId: string,
+  urls: string[],
+): Promise<string[]> {
+  const sb = service();
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < urls.length; i++) {
+    const src = urls[i];
+    if (!src || typeof src !== "string" || seen.has(src)) continue;
+    seen.add(src);
+    // If already in our own bucket, keep as-is.
+    if (src.includes("/storage/v1/object/public/video-references/") ||
+        src.includes("/storage/v1/object/public/generated-images/")) {
+      out.push(src);
+      continue;
+    }
+    try {
+      const r = await fetch(src);
+      if (!r.ok) { console.warn("[refs] fetch failed", src, r.status); continue; }
+      const ct = r.headers.get("content-type") || "image/jpeg";
+      const ext = ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : "jpg";
+      const buf = new Uint8Array(await r.arrayBuffer());
+      const path = `${userId}/${adId}/ref-${i}-${Date.now()}.${ext}`;
+      const { error } = await sb.storage.from("video-references").upload(path, buf, {
+        contentType: ct, upsert: true,
+      });
+      if (error) { console.warn("[refs] upload failed", error.message); continue; }
+      const { data: pub } = sb.storage.from("video-references").getPublicUrl(path);
+      out.push(pub.publicUrl);
+    } catch (e) {
+      console.warn("[refs] mirror error", (e as Error).message);
+    }
+  }
+  return out;
+}
+
 // ── Stage 3: Storyboard (Nano Banana via Lovable AI Gateway) ───────────────
 async function generateSceneImage(args: {
   sceneId: string;
   prompt: SceneSpec["prompt"];
-  referenceImageUrl: string | null;
+  referenceImageUrls: string[];
   songTitle: string;
   userId: string;
 }): Promise<{ url: string }> {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   if (!lovableKey) throw new Error("LOVABLE_API_KEY missing");
+
+  const refs = (args.referenceImageUrls ?? []).filter(Boolean).slice(0, 4);
+  const refNote = refs.length
+    ? `\nUse the ${refs.length} attached reference image${refs.length > 1 ? "s" : ""} to steer subject, wardrobe, palette and overall look — preserve recognizable visual identity across all scenes.`
+    : "";
 
   const composed = [
     `Cinematic music-video storyboard frame for "${args.songTitle}".`,
@@ -229,12 +275,12 @@ async function generateSceneImage(args: {
     `Environment: ${args.prompt.environment}`,
     `Color grading: ${args.prompt.colorGrading}`,
     `VFX: ${args.prompt.vfx}`,
-    `Photorealistic, 16:9, rich depth of field, professional film stock.`,
+    `Photorealistic, 16:9, rich depth of field, professional film stock.${refNote}`,
   ].join("\n");
 
   const userContent: any[] = [{ type: "text", text: composed }];
-  if (args.referenceImageUrl) {
-    userContent.push({ type: "image_url", image_url: { url: args.referenceImageUrl } });
+  for (const url of refs) {
+    userContent.push({ type: "image_url", image_url: { url } });
   }
 
   const res = await fetch(`${LOVABLE_AI_API}/chat/completions`, {
@@ -253,13 +299,12 @@ async function generateSceneImage(args: {
     json?.choices?.[0]?.message?.content?.match(/data:image\/\w+;base64,([^"'\s)]+)/)?.[1];
   if (!b64) throw new Error("Nano Banana returned no image");
 
-  // Upload to storage
+  // Upload to permanent storage — versioned filename to bust caches on regen.
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   const sb = service();
-  const path = `${args.userId}/${args.sceneId}.png`;
+  const path = `${args.userId}/${args.sceneId}-${Date.now()}.png`;
   const { error: upErr } = await sb.storage.from("generated-images").upload(path, bytes, {
-    contentType: "image/png",
-    upsert: true,
+    contentType: "image/png", upsert: true,
   });
   if (upErr) throw upErr;
   const { data: pub } = sb.storage.from("generated-images").getPublicUrl(path);
