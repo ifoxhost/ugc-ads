@@ -37,6 +37,8 @@ export function AppSettingsManagement() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [runningCleanup, setRunningCleanup] = useState(false);
+  const [runs, setRuns] = useState<CleanupRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -53,7 +55,19 @@ export function AppSettingsManagement() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  const loadRuns = async () => {
+    setRunsLoading(true);
+    const { data, error } = await supabase
+      .from("cleanup_runs" as any)
+      .select("*")
+      .order("started_at", { ascending: false })
+      .limit(20);
+    setRunsLoading(false);
+    if (error) { toast.error(error.message); return; }
+    setRuns((data ?? []) as unknown as CleanupRun[]);
+  };
+
+  useEffect(() => { load(); loadRuns(); }, []);
 
   const save = async (key: string, min: number, max: number) => {
     const n = parseInt(drafts[key] ?? "", 10);
@@ -76,13 +90,26 @@ export function AppSettingsManagement() {
   const runCleanup = async () => {
     setRunningCleanup(true);
     try {
-      const { data, error } = await supabase.functions.invoke("cleanup-storyboard-assets", { body: {} });
+      const { data, error } = await supabase.functions.invoke("cleanup-storyboard-assets", {
+        body: { triggeredBy: "admin-ui" },
+      });
       if (error) throw error;
       toast.success(`Cleanup ran — deleted ${data?.deleted?.refs ?? 0} refs, ${data?.deleted?.imgs ?? 0} scene images.`);
+      loadRuns();
     } catch (e: any) {
       toast.error(e?.message ?? "Cleanup failed");
+      loadRuns();
     } finally { setRunningCleanup(false); }
   };
+
+  const formatDuration = (start: string, finish: string | null) => {
+    if (!finish) return "—";
+    const ms = new Date(finish).getTime() - new Date(start).getTime();
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+
 
   return (
     <Card>
