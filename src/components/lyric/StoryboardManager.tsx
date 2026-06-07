@@ -126,13 +126,14 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [ad.id]);
 
+  const unlockedScenes = useMemo(() => scenes.filter((s) => !s.locked), [scenes]);
   const missingScenes = useMemo(
-    () => scenes.filter((s) => s.image_status !== "ready" || !s.image_url),
-    [scenes],
+    () => unlockedScenes.filter((s) => s.image_status !== "ready" || !s.image_url),
+    [unlockedScenes],
   );
-  const readyCount = scenes.length - missingScenes.length;
+  const readyCount = unlockedScenes.length - missingScenes.length;
 
-  const allReady = scenes.length > 0 && missingScenes.length === 0;
+  const allReady = unlockedScenes.length > 0 && missingScenes.length === 0;
   const isRendering = videoStatus === "processing" || renderBusy;
 
   // ── Mutations ────────────────────────────────────────────────────────────
