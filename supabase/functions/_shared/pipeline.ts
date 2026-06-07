@@ -153,19 +153,23 @@ ${directionBlock}`;
   // Enforce evenly spaced timings spanning the full song duration so the
   // final stitched video always matches the imported audio length.
   const segLen = (opts.duration || 60) / Math.max(1, raw.length);
-  const scenes: SceneSpec[] = raw.map((s: any, i: number) => ({
-    index: i,
-    lyric_lines: Array.isArray(s.lyric_lines) ? s.lyric_lines : [],
-    start_sec: Math.round(i * segLen * 100) / 100,
-    end_sec: Math.round((i + 1) * segLen * 100) / 100,
-    prompt: {
-      story: String(s.prompt?.story ?? ""),
-      camera: String(s.prompt?.camera ?? ""),
-      environment: String(s.prompt?.environment ?? ""),
-      colorGrading: String(s.prompt?.colorGrading ?? ""),
-      vfx: String(s.prompt?.vfx ?? ""),
-    },
-  }));
+  const scenes: SceneSpec[] = raw.map((s: any, i: number) => {
+    const p = s.prompt ?? {};
+    const story = String(p.story ?? "").trim() || `Scene ${i + 1} for "${opts.songTitle}" — evocative imagery matching the song's mood.`;
+    return {
+      index: i,
+      lyric_lines: Array.isArray(s.lyric_lines) ? s.lyric_lines : [],
+      start_sec: Math.round(i * segLen * 100) / 100,
+      end_sec: Math.round((i + 1) * segLen * 100) / 100,
+      prompt: {
+        story,
+        camera: String(p.camera ?? "").trim() || "Slow cinematic push-in, shallow depth of field.",
+        environment: String(p.environment ?? "").trim() || "Atmospheric setting that complements the track.",
+        colorGrading: String(p.colorGrading ?? "").trim() || "Rich, filmic color palette with deep contrast.",
+        vfx: String(p.vfx ?? "").trim() || "Subtle particle and light effects for ambience.",
+      },
+    };
+  });
   if (scenes.length === 0) throw new Error("Script returned no scenes");
 
   const sb = service();
