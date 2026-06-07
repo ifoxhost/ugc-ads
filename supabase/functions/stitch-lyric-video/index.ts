@@ -98,11 +98,17 @@ serve(async (req) => {
 
 
   try {
-    const { adId } = await req.json();
+    const body = await req.json().catch(() => ({} as any));
+    const { adId, overrides } = body ?? {};
     if (!adId) return json({ error: "adId required" }, 400);
 
+    // Per-job overrides — clamp to safe ranges; fall back to env defaults.
+    const maxAttempts = clampInt(overrides?.falMaxAttempts, FAL_MAX_ATTEMPTS, 1, 5);
+    const tolerance = clampNum(overrides?.toleranceSec, DURATION_TOLERANCE_SEC, 0.1, 30);
+    const overrideApplied = maxAttempts !== FAL_MAX_ATTEMPTS || tolerance !== DURATION_TOLERANCE_SEC;
+
     const { data: ad } = await sb.from("generated_ads")
-      .select("id, user_id, aspect_ratio, ad_copy")
+      .select("id, user_id, aspect_ratio, ad_copy, email")
       .eq("id", adId).maybeSingle();
     if (!ad) return json({ error: "Ad not found" }, 404);
 
@@ -120,7 +126,7 @@ serve(async (req) => {
     const clipPlan = buildClipPlan(ready, totalDuration);
     const planTotal = clipPlan.reduce((s, c) => s + c.duration, 0);
 
-    console.log(`[stitch] ad=${adId} clips=${clipPlan.length} planTotal=${planTotal}s audio=${totalDuration}s primary=${falKey ? "fal" : shotstackKey ? "shotstack" : "none"}`);
+    console.log(`[stitch] ad=${adId} clips=${clipPlan.length} planTotal=${planTotal}s audio=${totalDuration}s primary=${falKey ? "fal" : shotstackKey ? "shotstack" : "none"} maxAttempts=${maxAttempts} tolerance=${tolerance}s${overrideApplied ? " (override)" : ""}`);
 
     await sb.from("generated_ads").update({
       video_progress: 90,
@@ -132,6 +138,8 @@ serve(async (req) => {
     // Audit trail entries — one per stitcher attempt.
     const audit: AuditEntry[] = [];
     const startedAt = new Date().toISOString();
+    const userEmail = (ad as any).email as string | undefined;
+
 
     // === PRIMARY: fal.ai compose (with bounded retries) ===
     let lastFalDrift: { measured: number | null; delta: number | null } | null = null;
