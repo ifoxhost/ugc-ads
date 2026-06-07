@@ -703,6 +703,40 @@ const Library = () => {
     }
   };
 
+  /** Robust clipboard write with fallback for blocked / non-secure contexts */
+  const writeToClipboard = async (text: string): Promise<boolean> => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch { return false; }
+  };
+
+  const copySliceField = useCallback(async (value: string, label: string, key: string) => {
+    const ok = await writeToClipboard(value);
+    if (ok) {
+      sonner.success(`${label} copied`, {
+        description: value.length > 80 ? `${value.slice(0, 80)}…` : value,
+      });
+      setCopiedSliceKey(key);
+      setTimeout(() => setCopiedSliceKey((prev) => (prev === key ? null : prev)), 2000);
+    } else {
+      sonner.error("Copy failed", {
+        description: "Clipboard access is blocked. Select the text manually and press Ctrl/Cmd+C.",
+      });
+    }
+  }, []);
+
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
   const [restitchingIds, setRestitchingIds] = useState<Set<string>>(new Set());
   const [reslicingIds, setReslicingIds] = useState<Set<string>>(new Set());
