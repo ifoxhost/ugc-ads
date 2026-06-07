@@ -1,0 +1,61 @@
+project_id = "eqiwbtxomiskpekgrsph"
+
+[functions]
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.check-rate-limit]
+    verify_jwt = false
+  [functions.cleanup-trash]
+    verify_jwt = false
+  [functions.cleanup-video-ads]
+    verify_jwt = false
+  [functions.fix-audio-storage]
+    verify_jwt = false
+  [functions.generate-ugc-ad]
+    verify_jwt = true
+  [functions.generate-voice-previews]
+    verify_jwt = false
+  [functions.notify-subscription-expiry]
+    verify_jwt = false
+  [functions.notify-trash-expiry]
+    verify_jwt = false
+  [functions.notify-video-expiry]
+    verify_jwt = false
+  [functions.payfast-checkout]
+    verify_jwt = true
+  [functions.payfast-webhook]
+    verify_jwt = false
+  [functions.pexels-search]
+    verify_jwt = true
+  [functions.poll-lyric-video-status]
+    verify_jwt = false
+  [functions.poll-video-status]
+    verify_jwt = false
+  [functions.preview-voice]
+    verify_jwt = false
+  [functions.send-cancellation-email]
+    verify_jwt = true
+  [functions.send-feature-announcement]
+    verify_jwt = true
+  [functions.send-push-notification]
+    verify_jwt = true
+  [functions.stripe-checkout]
+    verify_jwt = true
+  [functions.stripe-webhook]
+    verify_jwt = false
+  [functions.submit-lyric-video]
+    verify_jwt = true
+  [functions.submit-ugc-image-ad]
+    verify_jwt = true
+  [functions.submit-ugc-request]
+    verify_jwt = true
+  [functions.submit-video-ad]
+    verify_jwt = true
+  [functions.suno-parse]
+    verify_jwt = false
+  [functions.ugc-webhook-callback]
+    verify_jwt = false
+  [functions.video-progress-update]
+    verify_jwt = false
+  [functions.weekly-digest]
+    verify_jwt = false
