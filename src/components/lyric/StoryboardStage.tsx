@@ -126,18 +126,7 @@ export default function StoryboardStage({ adId, onClose }: Props) {
     }
   };
 
-  const handleRender = async () => {
-    setRendering(true);
-    try {
-      const { error } = await supabase.functions.invoke("render-lyric-video", { body: { adId } });
-      if (error) throw error;
-      toast.success("Render started — we'll notify you when it's ready.");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to start render");
-    } finally {
-      setRendering(false);
-    }
-  };
+
 
   return (
     <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
