@@ -128,11 +128,23 @@ serve(async (req) => {
     const kieTasks: Array<{ sceneId: string; index: number; taskId: string; durationSec: number; referenceAudioUrl?: string }> = [];
     const failures: Array<{ sceneId: string; error: string }> = [];
 
-    // Map plan tier → Seedance resolution (Kie only supports 480p / 720p).
-    const planTier = String((adCopy as any).planTier ?? (adCopy as any).quality ?? "").toLowerCase();
-    const seedanceResolution: "480p" | "720p" =
-      planTier === "starter" || planTier === "sd" ? "480p" : "720p";
+    // Seedance via Kie only supports 480p / 720p. We default to 720p because
+    // 1080p (and resolution-less submits) return HTTP 422 / "Invalid resolution"
+    // which forces a costly per-scene regeneration. Keep this constant.
+    const seedanceResolution: "480p" | "720p" = "720p";
 
+    // Validate audio before rendering — without it the stitcher can't mux the
+    // song and we'd ship a silent video.
+    if (!audioUrl) {
+      await sb.from("generated_ads").update({
+        ad_copy: { ...adCopy, pipelineStage: "ready_to_render", audioMissing: true },
+      }).eq("id", adId);
+      return new Response(JSON.stringify({
+        error: "Missing audio track. Re-import your Suno link or upload an audio file before rendering.",
+      }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const MAX_SUBMIT_ATTEMPTS = 2;
     for (let i = 0; i < scenes.length; i++) {
       const s = scenes[i];
       const sceneDur = Math.max(1, Number(s.end_sec) - Number(s.start_sec));
@@ -146,28 +158,40 @@ serve(async (req) => {
         (s.prompt as any)?.vfx,
       ].filter(Boolean).join(" ");
       const refAudio = sceneSlices[s.id]?.url;
-      try {
-        const taskId = await submitKieClip({
-          kind: kieModel.kind,
-          endpoint: kieModel.endpoint,
-          modelId: kieModel.id,
-          clip: {
-            sceneId: s.id,
-            index: s.index,
-            imageUrl: s.image_url!,
-            prompt: promptText,
-            durationSec: clipDur,
-            aspectRatio: aspect,
-            referenceAudioUrl: refAudio,
-            resolution: seedanceResolution,
-          },
-        });
-        kieTasks.push({ sceneId: s.id, index: s.index, taskId, durationSec: clipDur, referenceAudioUrl: refAudio });
-      } catch (e) {
-        failures.push({ sceneId: s.id, error: (e as Error).message });
+
+      let submitted = false;
+      let lastErr = "";
+      for (let attempt = 1; attempt <= MAX_SUBMIT_ATTEMPTS && !submitted; attempt++) {
+        try {
+          const taskId = await submitKieClip({
+            kind: kieModel.kind,
+            endpoint: kieModel.endpoint,
+            modelId: kieModel.id,
+            clip: {
+              sceneId: s.id,
+              index: s.index,
+              imageUrl: s.image_url!,
+              prompt: promptText,
+              durationSec: clipDur,
+              aspectRatio: aspect,
+              referenceAudioUrl: refAudio,
+              resolution: seedanceResolution,
+            },
+          });
+          kieTasks.push({ sceneId: s.id, index: s.index, taskId, durationSec: clipDur, referenceAudioUrl: refAudio });
+          submitted = true;
+        } catch (e) {
+          lastErr = (e as Error).message;
+          // Credit exhaustion will not heal on retry — bail out of the loop.
+          if (/credits?\s*insufficient|insufficient\s*credit|top\s*up/i.test(lastErr)) break;
+          if (attempt < MAX_SUBMIT_ATTEMPTS) {
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
+          }
+        }
       }
-      // Small inter-scene delay to avoid hammering Kie's submit endpoint
-      // (helps when the upstream model has per-second request caps).
+      if (!submitted) failures.push({ sceneId: s.id, error: lastErr || "unknown" });
+
+      // Small inter-scene delay to avoid hammering Kie's submit endpoint.
       if (i < scenes.length - 1) {
         await new Promise((r) => setTimeout(r, 600));
       }
