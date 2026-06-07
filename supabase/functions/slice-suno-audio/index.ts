@@ -55,6 +55,7 @@ serve(async (req) => {
 
     const { adId, force = false } = await req.json().catch(() => ({}));
     if (!adId) return json({ error: "adId required" }, 400);
+    failedAdId = adId;
 
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: ad } = await sb.from("generated_ads")
