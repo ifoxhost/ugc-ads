@@ -46,6 +46,32 @@ interface StitchValidation {
   validatedAt?: string | null;
 }
 
+interface StitchAuditEntry {
+  stitcher: string;
+  attempt: number;
+  startedAt?: string;
+  endedAt?: string;
+  outcome?: string;
+  measuredDurationSec?: number | null;
+  driftSec?: number | null;
+  withinTolerance?: boolean | null;
+  requestedDurationSec?: number | null;
+  tolerance?: number | null;
+  error?: string;
+  redactionApplied?: boolean;
+}
+
+interface StitchAudit {
+  version?: number;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  finalStitcher?: string;
+  tolerance?: number | null;
+  requestedDurationSec?: number | null;
+  entries?: StitchAuditEntry[];
+  redactionApplied?: boolean;
+}
+
 interface AdCopy {
   headline?: string;
   cta?: string;
@@ -61,6 +87,7 @@ interface AdCopy {
   pexelsBackgroundThumbnail?: string;
   stitchedBy?: string;
   stitchValidation?: StitchValidation;
+  stitchAudit?: StitchAudit;
 }
 
 interface GeneratedAd {
@@ -634,6 +661,7 @@ const Library = () => {
   };
 
   const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
+  const [restitchingIds, setRestitchingIds] = useState<Set<string>>(new Set());
   const [isBatchRegenerating, setIsBatchRegenerating] = useState(false);
 
   /** Estimated duration in seconds from lyric line count */
@@ -705,6 +733,51 @@ const Library = () => {
     } finally {
       setRegeneratingIds(prev => { const s = new Set(prev); s.delete(ad.id); return s; });
     }
+  };
+
+  const handleRestitch = async (ad: GeneratedAd) => {
+    setRestitchingIds(prev => new Set(prev).add(ad.id));
+    try {
+      const res = await supabase.functions.invoke("stitch-lyric-video", {
+        body: { adId: ad.id },
+      });
+      if (res.error) throw res.error;
+      toast({
+        title: "Re-stitch started",
+        description: "fal.ai retries will run, falling back to Shotstack if needed.",
+      });
+      fetchAds();
+    } catch (err: any) {
+      console.error("Re-stitch error:", err);
+      toast({
+        title: "Re-stitch failed",
+        description: err?.message ?? "Could not start re-stitch.",
+        variant: "destructive",
+      });
+    } finally {
+      setRestitchingIds(prev => { const s = new Set(prev); s.delete(ad.id); return s; });
+    }
+  };
+
+  const downloadStitchAudit = (ad: GeneratedAd) => {
+    const audit = ad.ad_copy?.stitchAudit ?? null;
+    const validation = ad.ad_copy?.stitchValidation ?? null;
+    const payload = {
+      adId: ad.id,
+      exportedAt: new Date().toISOString(),
+      finalStitcher: ad.ad_copy?.stitchedBy ?? validation?.stitcher ?? null,
+      stitchValidation: validation,
+      stitchAudit: audit,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `stitch-audit-${ad.id.slice(0, 8)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const getStyleLabel = (styleId: string) => STYLE_LABELS[styleId] || styleId;
@@ -1345,6 +1418,60 @@ const Library = () => {
                     </div>
                   );
                 })()}
+
+                {/* Audit trail */}
+                {mediaViewer.ad!.ad_copy!.stitchAudit?.entries?.length ? (
+                  <details className="mt-3 text-sm">
+                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                      Decision audit trail ({mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.length} attempt{mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.length === 1 ? "" : "s"})
+                      {mediaViewer.ad!.ad_copy!.stitchAudit!.redactionApplied === false && (
+                        <span className="ml-2 text-destructive">• secrets NOT redacted</span>
+                      )}
+                    </summary>
+                    <ol className="mt-2 space-y-1 pl-4 list-decimal">
+                      {mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.map((e, i) => {
+                        const fmt = (n: number | null | undefined) =>
+                          n == null ? "—" : `${Number(n).toFixed(2)}s`;
+                        const tone =
+                          e.outcome === "accepted" ? "text-primary" :
+                          e.outcome === "accepted_with_drift" ? "text-amber-500" :
+                          e.outcome === "drift_rejected" || e.outcome === "error" ? "text-destructive" :
+                          "text-muted-foreground";
+                        return (
+                          <li key={i} className={`font-mono text-xs ${tone}`}>
+                            [{e.stitcher} #{e.attempt}] {e.outcome ?? "—"}
+                            {e.driftSec != null && ` • drift ${fmt(e.driftSec)}`}
+                            {e.measuredDurationSec != null && ` • measured ${fmt(e.measuredDurationSec)}`}
+                            {e.error && ` • ${e.error}`}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </details>
+                ) : null}
+
+                {/* Re-stitch + audit export */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRestitch(mediaViewer.ad!)}
+                    disabled={restitchingIds.has(mediaViewer.ad!.id)}
+                  >
+                    {restitchingIds.has(mediaViewer.ad!.id)
+                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      : <Scissors className="h-4 w-4 mr-2" />}
+                    Re-stitch
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => downloadStitchAudit(mediaViewer.ad!)}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download audit (JSON)
+                  </Button>
+                </div>
               </div>
             )}
 
