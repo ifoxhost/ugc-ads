@@ -69,6 +69,7 @@ serve(async (req) => {
     // pass them as reference_audio_urls. Strict per-clip validation is
     // enforced before any Kie submission so failures surface early.
     let sceneSlices: Record<string, { url: string; durationSec: number; startSec: number }> = {};
+    const sceneSliceErrors: Array<{ sceneId: string; index: number; reason: string; durationSec: number }> = [];
     if (kieModel.kind === "seedance" && audioUrl) {
       const cld = readCloudinaryEnv();
       if (cld) {
@@ -92,8 +93,13 @@ serve(async (req) => {
             } catch (e) {
               if (e instanceof SeedanceAudioRefError) {
                 console.warn(`[render] scene ${s.index} audio ref rejected:`, e.details);
+                for (const d of e.details) {
+                  sceneSliceErrors.push({ sceneId: s.id, index: s.index, reason: d.reason, durationSec: dur });
+                }
               } else {
-                console.warn(`[render] scene ${s.index} audio ref error:`, (e as Error).message);
+                const reason = (e as Error).message;
+                console.warn(`[render] scene ${s.index} audio ref error:`, reason);
+                sceneSliceErrors.push({ sceneId: s.id, index: s.index, reason, durationSec: dur });
               }
             }
           }
@@ -102,6 +108,8 @@ serve(async (req) => {
           (adCopy as any).sceneAudioSlices = Object.entries(sceneSlices).map(
             ([sceneId, v]) => ({ sceneId, ...v }),
           );
+          (adCopy as any).sceneAudioSliceErrors = sceneSliceErrors;
+          (adCopy as any).sceneAudioSlicesGeneratedAt = new Date().toISOString();
         } catch (e) {
           console.warn("[render] Cloudinary slicing failed, proceeding without reference audio:",
             (e as Error).message);
