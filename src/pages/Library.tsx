@@ -103,6 +103,21 @@ interface AdCopy {
   }>;
   sceneAudioSlicesGeneratedAt?: string;
   cloudinaryAudio?: { publicId: string; durationSec: number; format: string };
+  sceneAudioJobValidation?: {
+    valid: boolean;
+    totalFiles: number;
+    totalDurationSec: number;
+    limits: { maxFiles: number; maxTotalSec: number; maxPerSliceSec: number };
+    errors: Array<{ sceneId: string; index: number; reason: string; durationSec: number; scope: "scene" | "job" }>;
+  };
+  sliceStatus?: {
+    phase: "queued" | "uploading" | "slicing" | "validating" | "done" | "failed";
+    at?: string;
+    sliceCount?: number;
+    errorCount?: number;
+    error?: string;
+    jobValid?: boolean;
+  };
 }
 
 interface GeneratedAd {
