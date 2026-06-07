@@ -30,7 +30,7 @@ const AcceptableUse = () => (
       <Section title="2. Permitted Use">
         <p>You may use SongDoe to:</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li>Create lyric videos from song lyrics you own or have rights to</li>
+          <li>Create AI music videos from song lyrics you own or have rights to</li>
           <li>Generate UGC-style ads for legitimate products and services</li>
           <li>Store, manage, and share your creative output</li>
           <li>Explore features within the limits of your subscription plan</li>

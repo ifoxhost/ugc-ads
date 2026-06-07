@@ -24,7 +24,7 @@ const plans = [
     price: "R199",
     period: "/month",
     features: [
-      "20 lyric videos / month",
+      "20 AI music videos / month",
       "SD export",
       "All 6 templates",
       "Suno link parsing",
@@ -39,7 +39,7 @@ const plans = [
     badge: "Most Popular",
     offerBadge: "🔥 Best Value",
     features: [
-      "100 lyric videos / month",
+      "100 AI music videos / month",
       "HD export",
       "All 6 premium templates",
       "Suno link parsing",
@@ -54,7 +54,7 @@ const plans = [
     price: "R1 299",
     period: "/month",
     features: [
-      "400 lyric videos / month",
+      "400 AI music videos / month",
       "4K export",
       "Custom font uploads",
       "Multi-project workspace",
@@ -112,7 +112,7 @@ const SubscriptionPlansDialog = ({ open, onOpenChange }: SubscriptionPlansDialog
             Subscribe to Generate Videos
           </DialogTitle>
           <DialogDescription>
-            Choose a plan to unlock lyric video generation and start creating stunning music content
+            Choose a plan to unlock AI music video generation and start creating stunning music content
           </DialogDescription>
         </DialogHeader>
 

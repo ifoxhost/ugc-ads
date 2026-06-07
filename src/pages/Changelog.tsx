@@ -9,7 +9,7 @@ const entries = [
     badgeColor: "bg-primary/10 text-primary border-primary/20",
     icon: Sparkles,
     changes: [
-      { type: "feature", text: "Pexels background video picker — choose a real video background for any lyric video" },
+      { type: "feature", text: "Pexels background video picker — choose a real video background for any AI music video" },
       { type: "feature", text: "Background blur & opacity controls in style options" },
       { type: "improvement", text: "Suno link parser now supports private song fallback with clearer error messaging" },
       { type: "fix", text: "Fixed email notifications not delivering after edge function bundling issue" },

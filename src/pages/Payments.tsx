@@ -147,7 +147,7 @@ export default function Payments() {
             <CardHeader className="text-center">
               <CardTitle>No Active Subscription</CardTitle>
               <CardDescription>
-                Choose a plan to start creating lyric videos
+                Choose a plan to start creating AI music videos
               </CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center">

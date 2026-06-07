@@ -203,7 +203,7 @@ const Dashboard = () => {
             onClick={() => navigate("/library")}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lyric Videos</CardTitle>
+              <CardTitle className="text-sm font-medium">AI Music Videos</CardTitle>
               <ImageIcon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -241,7 +241,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Quick Action - Create Lyric Video */}
+        {/* Quick Action - Create AI Music Video */}
         <div className="mb-8">
           <Card 
             className="border-border hover:border-primary/50 transition-colors cursor-pointer group bg-gradient-to-br from-primary/5 to-primary/10" 
@@ -253,8 +253,8 @@ const Dashboard = () => {
                   <Sparkles className="h-7 w-7 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <CardTitle className="text-xl">Create Lyric Video</CardTitle>
-                  <CardDescription>Generate a stunning lyric video from your song</CardDescription>
+                  <CardTitle className="text-xl">Create AI Music Video</CardTitle>
+                  <CardDescription>Generate a stunning AI music video from your song</CardDescription>
                 </div>
                 <Button className="group-hover:bg-primary/90">
                   Get Started <ArrowRight className="ml-2 h-4 w-4" />
@@ -274,7 +274,7 @@ const Dashboard = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Recent Lyric Videos</CardTitle>
+                <CardTitle>Recent AI Music Videos</CardTitle>
                 <CardDescription>Your latest generated videos</CardDescription>
               </div>
               <Button variant="outline" onClick={() => navigate("/library")}>
@@ -312,7 +312,7 @@ const Dashboard = () => {
                       />
                       <div>
                     <p className="font-medium capitalize">
-                          Lyric Video • {ad.style_template}
+                          AI Music Video • {ad.style_template}
                         </p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="h-3 w-3" />

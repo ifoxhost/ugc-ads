@@ -530,7 +530,7 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
                       </div>
                     )}
 
-                    {/* Render Lyric Video fields if present */}
+                    {/* Render AI Music Video fields if present */}
                     {selectedAd.ad_copy.title && (
                       <div>
                         <p className="text-xs text-muted-foreground">Song Title</p>
