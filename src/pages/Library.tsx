@@ -194,10 +194,26 @@ const DATE_FILTER_OPTIONS = [
   { value: "month", label: "This Month" },
 ];
 
+const EXPIRY_FILTER_OPTIONS = [
+  { value: "all", label: "Any Expiry" },
+  { value: "expiring_soon", label: "Expiring ≤ 3 days" },
+  { value: "expiring_week", label: "Expiring ≤ 7 days" },
+  { value: "fresh", label: "Fresh (> 7 days)" },
+];
+
+const DURATION_FILTER_OPTIONS = [
+  { value: "all", label: "Any Duration" },
+  { value: "short", label: "Short (< 30s)" },
+  { value: "medium", label: "Medium (30–90s)" },
+  { value: "long", label: "Long (> 90s)" },
+];
+
 const SORT_OPTIONS = [
   { value: "date", label: "Date" },
   { value: "style", label: "Style" },
   { value: "status", label: "Status" },
+  { value: "expiry", label: "Expiry" },
+  { value: "duration", label: "Duration" },
 ];
 
 type SortDirection = "asc" | "desc";
