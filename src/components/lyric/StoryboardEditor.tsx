@@ -337,29 +337,31 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
   };
 
   const autosaveClip = async (clipId: string, fields: any) => {
-    await supabase.from("storyboard_scenes").update(fields).eq("id", clipId);
+    // Persist editable scene fields back to video_scenes when possible.
+    try {
+      const updates: any = {};
+      if (typeof fields.prompt === "string") {
+        updates.prompt = {
+          story: fields.prompt,
+          camera: fields.camera_setting,
+          environment: fields.environment_setting,
+          colorGrading: fields.lighting_setting,
+        };
+      }
+      if (typeof fields.start_time === "number") updates.start_sec = fields.start_time;
+      if (typeof fields.end_time === "number") updates.end_sec = fields.end_time;
+      if (typeof fields.start_reference_image === "string") updates.image_url = fields.start_reference_image;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("video_scenes").update(updates).eq("id", clipId);
+      }
+    } catch (e) {
+      console.warn("[StoryboardEditor] autosave skipped:", e);
+    }
   };
 
-  const syncScenesToDB = async (updatedClips: StoryboardClip[]) => {
-    await supabase.from("storyboard_scenes").delete().eq("project_id", ad.id);
-    const inserts = updatedClips.map((c, i) => ({
-      id: c.id,
-      project_id: ad.id,
-      scene_number: i + 1,
-      start_time: c.start_time,
-      end_time: c.end_time,
-      duration: c.duration,
-      prompt: c.prompt,
-      start_reference_image: c.start_reference_image,
-      end_reference_image: c.end_reference_image,
-      camera_setting: c.camera_setting,
-      motion_setting: c.motion_setting,
-      environment_setting: c.environment_setting,
-      lighting_setting: c.lighting_setting,
-      character_setting: c.character_setting,
-      videoUrl: c.videoUrl || null,
-    }));
-    await supabase.from("storyboard_scenes").insert(inserts);
+  const syncScenesToDB = async (_updatedClips: StoryboardClip[]) => {
+    // No-op: timeline-level resync is handled per-scene via autosaveClip.
+    return;
   };
 
   const handleAddClip = () => {
