@@ -1536,7 +1536,7 @@ const UGCGenerator = () => {
                 )}
 
                 {/* Library Section Capped at 4 items */}
-                {completedAds.length > 0 && (
+                {(completedAds.length > 0 || inProgressAds.length > 0) && (
                   <div className="space-y-4 pt-6 border-t border-border mt-8">
                     <div className="flex items-center justify-between mb-4">
                       <div>
