@@ -1418,6 +1418,60 @@ const Library = () => {
                     </div>
                   );
                 })()}
+
+                {/* Audit trail */}
+                {mediaViewer.ad!.ad_copy!.stitchAudit?.entries?.length ? (
+                  <details className="mt-3 text-sm">
+                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                      Decision audit trail ({mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.length} attempt{mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.length === 1 ? "" : "s"})
+                      {mediaViewer.ad!.ad_copy!.stitchAudit!.redactionApplied === false && (
+                        <span className="ml-2 text-destructive">• secrets NOT redacted</span>
+                      )}
+                    </summary>
+                    <ol className="mt-2 space-y-1 pl-4 list-decimal">
+                      {mediaViewer.ad!.ad_copy!.stitchAudit!.entries!.map((e, i) => {
+                        const fmt = (n: number | null | undefined) =>
+                          n == null ? "—" : `${Number(n).toFixed(2)}s`;
+                        const tone =
+                          e.outcome === "accepted" ? "text-primary" :
+                          e.outcome === "accepted_with_drift" ? "text-amber-500" :
+                          e.outcome === "drift_rejected" || e.outcome === "error" ? "text-destructive" :
+                          "text-muted-foreground";
+                        return (
+                          <li key={i} className={`font-mono text-xs ${tone}`}>
+                            [{e.stitcher} #{e.attempt}] {e.outcome ?? "—"}
+                            {e.driftSec != null && ` • drift ${fmt(e.driftSec)}`}
+                            {e.measuredDurationSec != null && ` • measured ${fmt(e.measuredDurationSec)}`}
+                            {e.error && ` • ${e.error}`}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </details>
+                ) : null}
+
+                {/* Re-stitch + audit export */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRestitch(mediaViewer.ad!)}
+                    disabled={restitchingIds.has(mediaViewer.ad!.id)}
+                  >
+                    {restitchingIds.has(mediaViewer.ad!.id)
+                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      : <Scissors className="h-4 w-4 mr-2" />}
+                    Re-stitch
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => downloadStitchAudit(mediaViewer.ad!)}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download audit (JSON)
+                  </Button>
+                </div>
               </div>
             )}
 
