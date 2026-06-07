@@ -325,6 +325,37 @@ const Library = () => {
     }
   }, [ads, mediaViewer.isOpen, mediaViewer.ad]);
 
+  // Reset slice-phase tracker whenever the viewed ad changes.
+  useEffect(() => {
+    prevSlicePhaseRef.current = mediaViewer.ad?.ad_copy?.sliceStatus?.phase ?? null;
+  }, [mediaViewer.ad?.id]);
+
+  // Aggressive polling + transition toast while a Re-slice is active.
+  useEffect(() => {
+    if (!mediaViewer.isOpen || !mediaViewer.ad) return;
+    const phase = mediaViewer.ad.ad_copy?.sliceStatus?.phase;
+    const isActive = phase === "queued" || phase === "uploading" || phase === "slicing" || phase === "validating";
+
+    // Toast when the Re-slice job transitions from active → done/failed
+    const prev = prevSlicePhaseRef.current;
+    const wasActive = prev === "queued" || prev === "uploading" || prev === "slicing" || prev === "validating";
+    if (wasActive && phase === "done") {
+      const count = mediaViewer.ad.ad_copy?.sliceStatus?.sliceCount ?? 0;
+      sonner.success("Audio re-slice complete", {
+        description: `${count} scene slice${count === 1 ? "" : "s"} ready.`,
+      });
+    } else if (wasActive && phase === "failed") {
+      const err = mediaViewer.ad.ad_copy?.sliceStatus?.error ?? "Unknown error";
+      sonner.error("Audio re-slice failed", { description: err });
+    }
+    prevSlicePhaseRef.current = phase ?? null;
+
+    if (!isActive) return;
+    const interval = setInterval(() => { fetchAds(); }, 2000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaViewer.isOpen, mediaViewer.ad?.id, mediaViewer.ad?.ad_copy?.sliceStatus?.phase]);
+
   // Track which ad IDs were "processing" so we can detect transitions → completed
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
   const prevSlicePhaseRef = useRef<string | null>(null);
