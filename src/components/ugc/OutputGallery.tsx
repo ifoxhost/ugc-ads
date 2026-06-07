@@ -222,7 +222,7 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
                     <span className="text-xs text-muted-foreground">Generating...</span>
                   </div>
                 </div>
-              ) : isVideoProcessing(ad) || isVideoRetrying(ad) ? (
+              ) : ad.status === "processing" || isVideoProcessing(ad) || isVideoRetrying(ad) ? (
                 <div className="aspect-square flex items-center justify-center bg-muted relative">
                   {ad.generated_image_url || ad.product_image_url ? (
                     <img
@@ -236,18 +236,24 @@ const OutputGallery = ({ ads, onDelete, onMakeVideo, onRetryVideo, onEditStorybo
                   {(() => {
                     const statusInfo = getVideoStatusMessage(ad);
                     return (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                        <span className="text-sm text-white font-medium mb-2">{statusInfo.message}</span>
-                        {statusInfo.progress > 0 && (
-                          <div className="w-full max-w-[80%] space-y-1">
-                            <Progress value={statusInfo.progress} className="h-2" />
-                            <div className="flex justify-between text-xs text-white/70">
-                              <span>Progress</span>
-                              <span className="font-medium">{statusInfo.progress}%</span>
-                            </div>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4 animate-fade-in">
+                        <div className="relative mb-3">
+                          <Loader2 className="h-9 w-9 animate-spin text-primary" />
+                          <span className="absolute inset-0 rounded-full bg-primary/30 blur-md animate-pulse" aria-hidden />
+                        </div>
+                        <span className="text-sm text-white font-semibold text-center mb-2 leading-tight">
+                          {statusInfo.message}
+                        </span>
+                        <div className="w-full max-w-[85%] space-y-1">
+                          <Progress value={Math.max(statusInfo.progress, 2)} className="h-2" />
+                          <div className="flex justify-between text-[11px] text-white/80">
+                            <span>{statusInfo.eta ?? "Estimating…"}</span>
+                            <span className="font-medium">{statusInfo.progress > 0 ? `${statusInfo.progress}%` : "—"}</span>
                           </div>
-                        )}
+                        </div>
+                        <Badge variant="outline" className="mt-3 border-primary/40 bg-primary/10 text-[10px] text-white">
+                          Live
+                        </Badge>
                       </div>
                     );
                   })()}
