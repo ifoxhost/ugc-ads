@@ -2149,7 +2149,7 @@ const Library = () => {
               <p className="text-xs text-muted-foreground mt-2 text-center">
                 {new Date(ad.created_at).toLocaleString()}
               </p>
-              <div className="flex gap-2 mt-4">
+              <div className="flex gap-2 mt-4 flex-wrap justify-center">
                 {!isLyric && (
                   <Button
                     onClick={() => handleRetry(ad)}
@@ -2163,6 +2163,16 @@ const Library = () => {
                       <RefreshCw className="h-4 w-4 mr-2" />
                     )}
                     Retry
+                  </Button>
+                )}
+                {isLyric && (
+                  <Button
+                    onClick={() => setEditingStoryboardAd(ad)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Film className="h-4 w-4 mr-2" />
+                    Open Storyboard
                   </Button>
                 )}
                 <Button
