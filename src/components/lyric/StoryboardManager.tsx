@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Loader2, RefreshCw, Sparkles, Film, Music2,
   ImageIcon, AlertTriangle, Check, Wand2, Save, Download, Play, Pause, Eye,
+  Lock, Unlock,
 } from "lucide-react";
 
 interface Props {
