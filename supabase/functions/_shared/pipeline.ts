@@ -427,7 +427,7 @@ export async function regenerateScene(opts: { sceneId: string; userId: string })
   const songTitle = String(adCopy.title ?? "Untitled");
   const referenceImageUrls = resolveAdReferences(adCopy, ad?.product_image_url ?? null);
 
-  await sb.from("video_scenes").update({ image_status: "generating", error_message: null }).eq("id", scene.id);
+  await sb.from("video_scenes").update({ image_status: "generating", error_message: null, failed_step: null }).eq("id", scene.id);
   try {
     const { url } = await generateSceneImage({
       sceneId: scene.id,
