@@ -120,7 +120,7 @@ serve(async (req) => {
           referenceImageUrl: referenceImageUrl ?? undefined,
           referenceImageName: referenceImageName ?? undefined,
           referenceImages: [], // filled after mirroring below
-          audioFileUrl: audioFileUrl ?? undefined,
+          audioFileUrl: audioFileUrl ?? audioUrl ?? undefined,
           aiModel: kieModel.id, aiImageModel: "nano-banana",
           resolution, renderProvider: "kie.ai",
           pipelineStage: "script",

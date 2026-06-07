@@ -171,55 +171,81 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
 
   const fetchStoryboardScenes = async (duration: number) => {
     try {
-      const { data, error } = await supabase
-        .from("storyboard_scenes")
-        .select("*")
-        .eq("project_id", ad.id)
-        .order("scene_number", { ascending: true });
+      // Primary source: video_scenes (Nano Banana storyboard images live here)
+      const { data: vScenes } = await supabase
+        .from("video_scenes")
+        .select("id, index, image_url, image_status, prompt, start_sec, end_sec, lyric_lines")
+        .eq("ad_id", ad.id)
+        .order("index", { ascending: true });
 
-      if (!error && data && data.length > 0) {
-        // Map database fields to scene state
-        const mapped = data.map((d: any) => ({
-          ...d,
-          videoUrl: d.videoUrl || d.video_url || null,
-          status: d.videoUrl ? "completed" : "idle",
-          model_used: d.model_used || "Kling 3.0",
-          seed: d.seed || 1234567,
-          generation_time: d.generation_time || "4.2s",
-          prompt_version: d.prompt_version || 1
-        }));
-        setClips(autoAdjustClips(mapped, duration));
-      } else {
-        // Fallback to legacy schema
+      if (vScenes && vScenes.length > 0) {
         const adCopy = ad.ad_copy || {};
-        if (adCopy.storyboard && Array.isArray(adCopy.storyboard) && adCopy.storyboard.length > 0) {
-          const legacyMapped = adCopy.storyboard.map((c: any, idx: number) => ({
-            id: c.id || `scene_${idx}`,
-            scene_number: c.index || (idx + 1),
-            prompt: c.prompt || "Visual scene details...",
-            duration: c.duration || 10,
-            start_time: 0,
-            end_time: 0,
-            start_reference_image: c.referenceImageUrl || "https://picsum.photos/id/40/300/300",
-            end_reference_image: "https://picsum.photos/id/41/300/300",
-            camera_setting: "Dynamic Tracking",
-            motion_setting: "Medium Flow",
-            environment_setting: "Wet Alley",
-            lighting_setting: "Neon Glow",
-            character_setting: "Reflective Jacket",
-            videoUrl: c.videoUrl || null,
-            status: c.videoUrl ? "completed" : "idle"
-          }));
-          setClips(autoAdjustClips(legacyMapped, duration));
-        } else {
-          // Fallback init
-          const masterPrompt = adCopy.lyricsPreview || ad.prompt_used || "Cinematic music video scene";
-          const initList = initializeDefaultStoryboard(masterPrompt, duration);
-          setClips(autoAdjustClips(initList, duration));
+        const kieTasks: any[] = Array.isArray(adCopy.kieTasks) ? adCopy.kieTasks : [];
+        const videoByScene = new Map<string, string>();
+        for (const t of kieTasks) {
+          if (t?.sceneId && t?.videoUrl) videoByScene.set(t.sceneId, t.videoUrl);
         }
+        const mapped: StoryboardClip[] = vScenes.map((s: any, idx: number) => {
+          const p = s.prompt || {};
+          const dur = Math.max(0.5, Number(s.end_sec) - Number(s.start_sec)) || 8;
+          const promptText = [p.story, p.camera, p.vfx].filter(Boolean).join(" ")
+            || (Array.isArray(s.lyric_lines) ? s.lyric_lines.join(" ") : "")
+            || `Scene ${idx + 1}`;
+          const vid = videoByScene.get(s.id) || null;
+          return {
+            id: s.id,
+            scene_number: (s.index ?? idx) + 1,
+            prompt: promptText,
+            duration: dur,
+            start_time: Number(s.start_sec) || 0,
+            end_time: Number(s.end_sec) || 0,
+            start_reference_image: s.image_url || null,
+            end_reference_image: s.image_url || null,
+            camera_setting: p.camera || "Dynamic Tracking",
+            motion_setting: "Medium Flow",
+            environment_setting: p.environment || "Neon Streets",
+            lighting_setting: p.colorGrading || "Neon Glow",
+            character_setting: "Reflective Jacket",
+            videoUrl: vid,
+            status: vid ? "completed" : (s.image_status === "ready" ? "idle" : "processing"),
+            model_used: adCopy.aiModel || "Nano Banana",
+            seed: 0,
+            generation_time: "—",
+            prompt_version: 1,
+          };
+        });
+        setClips(mapped);
+        return;
+      }
+
+      // Fallback: legacy storyboard in ad_copy, then default init
+      const adCopy = ad.ad_copy || {};
+      if (adCopy.storyboard && Array.isArray(adCopy.storyboard) && adCopy.storyboard.length > 0) {
+        const legacyMapped = adCopy.storyboard.map((c: any, idx: number) => ({
+          id: c.id || `scene_${idx}`,
+          scene_number: c.index || (idx + 1),
+          prompt: c.prompt || "Visual scene details...",
+          duration: c.duration || 10,
+          start_time: 0,
+          end_time: 0,
+          start_reference_image: c.referenceImageUrl || c.image_url || null,
+          end_reference_image: c.image_url || null,
+          camera_setting: "Dynamic Tracking",
+          motion_setting: "Medium Flow",
+          environment_setting: "Wet Alley",
+          lighting_setting: "Neon Glow",
+          character_setting: "Reflective Jacket",
+          videoUrl: c.videoUrl || null,
+          status: c.videoUrl ? "completed" : "idle",
+        }));
+        setClips(autoAdjustClips(legacyMapped, duration));
+      } else {
+        const masterPrompt = adCopy.lyricsPreview || ad.prompt_used || "Cinematic music video scene";
+        const initList = initializeDefaultStoryboard(masterPrompt, duration);
+        setClips(autoAdjustClips(initList, duration));
       }
     } catch (err) {
-      console.error(err);
+      console.error("[StoryboardEditor] fetch error:", err);
     }
   };
 
@@ -311,29 +337,31 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
   };
 
   const autosaveClip = async (clipId: string, fields: any) => {
-    await supabase.from("storyboard_scenes").update(fields).eq("id", clipId);
+    // Persist editable scene fields back to video_scenes when possible.
+    try {
+      const updates: any = {};
+      if (typeof fields.prompt === "string") {
+        updates.prompt = {
+          story: fields.prompt,
+          camera: fields.camera_setting,
+          environment: fields.environment_setting,
+          colorGrading: fields.lighting_setting,
+        };
+      }
+      if (typeof fields.start_time === "number") updates.start_sec = fields.start_time;
+      if (typeof fields.end_time === "number") updates.end_sec = fields.end_time;
+      if (typeof fields.start_reference_image === "string") updates.image_url = fields.start_reference_image;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("video_scenes").update(updates).eq("id", clipId);
+      }
+    } catch (e) {
+      console.warn("[StoryboardEditor] autosave skipped:", e);
+    }
   };
 
-  const syncScenesToDB = async (updatedClips: StoryboardClip[]) => {
-    await supabase.from("storyboard_scenes").delete().eq("project_id", ad.id);
-    const inserts = updatedClips.map((c, i) => ({
-      id: c.id,
-      project_id: ad.id,
-      scene_number: i + 1,
-      start_time: c.start_time,
-      end_time: c.end_time,
-      duration: c.duration,
-      prompt: c.prompt,
-      start_reference_image: c.start_reference_image,
-      end_reference_image: c.end_reference_image,
-      camera_setting: c.camera_setting,
-      motion_setting: c.motion_setting,
-      environment_setting: c.environment_setting,
-      lighting_setting: c.lighting_setting,
-      character_setting: c.character_setting,
-      videoUrl: c.videoUrl || null,
-    }));
-    await supabase.from("storyboard_scenes").insert(inserts);
+  const syncScenesToDB = async (_updatedClips: StoryboardClip[]) => {
+    // No-op: timeline-level resync is handled per-scene via autosaveClip.
+    return;
   };
 
   const handleAddClip = () => {
@@ -625,7 +653,7 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
     }
 
     const videoUrls = clips.map(c => c.videoUrl || c.video_url).filter(Boolean);
-    const audioUrl = ad.audio_url || ad.ad_copy?.audioUrl || "https://cdn1.suno.ai/7b879f5c-21d0-4922-89ea-fa5bdcd372d1.mp3";
+    const audioUrl = ad.ad_copy?.audioFileUrl || ad.ad_copy?.audioUrl || ad.audio_url || null;
     
     if (videoUrls.length === 0) {
       toast({
