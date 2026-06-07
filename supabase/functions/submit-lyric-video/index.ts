@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireSecrets, jsonError } from "../_shared/startup-checks.ts";
-import { orchestrateLyricVideo, getKieModel } from "../_shared/pipeline.ts";
+import { orchestrateLyricVideo, getKieModel, persistReferenceImages } from "../_shared/pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,7 +46,9 @@ serve(async (req) => {
       fontTheme = "bold", colorPalette = "dark",
       variationCount = 1,
       pexelsBackgroundUrl = null, pexelsBackgroundThumbnail = null,
+      pexelsBackgroundUrls = null, // optional array of selected pexels stills/videos
       referenceImageUrl = null, referenceImageName = null,
+      referenceImageUrls = null,   // optional array of uploaded ref image URLs
       aiModel = "kling", aiImageModel = "nano-banana",
       resolution = "1080p",
       audioFileUrl = null, audioUrl = null,
@@ -90,6 +92,14 @@ serve(async (req) => {
         { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Collect every reference candidate from Tab 1 (uploads + Pexels) into one list.
+    const rawRefs: string[] = [
+      ...(Array.isArray(referenceImageUrls) ? referenceImageUrls : []),
+      ...(referenceImageUrl ? [referenceImageUrl] : []),
+      ...(Array.isArray(pexelsBackgroundUrls) ? pexelsBackgroundUrls : []),
+      ...(pexelsBackgroundUrl ? [pexelsBackgroundUrl] : []),
+    ].filter((u): u is string => typeof u === "string" && u.length > 0);
+
     const adIds: string[] = [];
     for (let i = 0; i < variationCount; i++) {
       const { data: row, error: insErr } = await sb.from("generated_ads").insert({
@@ -97,7 +107,7 @@ serve(async (req) => {
         email: user.email || "",
         style_template: template,
         aspect_ratio: aspectRatio,
-        product_image_url: referenceImageUrl ?? "https://placehold.co/1080x1920/0a0a0a/ffffff?text=Lyric+Video",
+        product_image_url: referenceImageUrl ?? rawRefs[0] ?? "https://placehold.co/1080x1920/0a0a0a/ffffff?text=Lyric+Video",
         status: "processing",
         video_status: "queued",
         video_progress: 5,
@@ -106,8 +116,10 @@ serve(async (req) => {
           fontTheme, colorPalette,
           pexelsBackgroundUrl: pexelsBackgroundUrl ?? undefined,
           pexelsBackgroundThumbnail: pexelsBackgroundThumbnail ?? undefined,
+          pexelsBackgroundUrls: Array.isArray(pexelsBackgroundUrls) ? pexelsBackgroundUrls : undefined,
           referenceImageUrl: referenceImageUrl ?? undefined,
           referenceImageName: referenceImageName ?? undefined,
+          referenceImages: [], // filled after mirroring below
           audioFileUrl: audioFileUrl ?? undefined,
           aiModel: kieModel.id, aiImageModel: "nano-banana",
           resolution, renderProvider: "kie.ai",
@@ -115,9 +127,15 @@ serve(async (req) => {
           duration,
         },
         prompt_used: `BeatFrame lyric video: "${songTitle}" by ${artist || "Unknown"} | ${template} | ${aspectRatio} | ${kieModel.id} | nano-banana`,
-      }).select("id").single();
+      }).select("id, ad_copy").single();
       if (insErr || !row) { console.error("insert error", insErr); continue; }
       adIds.push(row.id);
+
+      // Mirror reference images into our permanent bucket so Pexels/temp URLs
+      // can't expire. Persist the resolved list on the ad row.
+      const persisted = await persistReferenceImages(user.id, row.id, rawRefs);
+      const mergedCopy = { ...(row.ad_copy as Record<string, unknown>), referenceImages: persisted };
+      await sb.from("generated_ads").update({ ad_copy: mergedCopy }).eq("id", row.id);
 
       // Run pipeline in background — submit returns immediately.
       // @ts-ignore Deno-specific
@@ -127,7 +145,7 @@ serve(async (req) => {
         songTitle, artist, lyrics,
         duration: Number(duration) || 60,
         audioUrl: audioFileUrl ?? audioUrl ?? null,
-        referenceImageUrl,
+        referenceImageUrls: persisted,
         storyDescription, characterInstructions, cameraInstructions,
         environmentInstructions, colorGradingInstructions, visualEffectsInstructions,
       }));

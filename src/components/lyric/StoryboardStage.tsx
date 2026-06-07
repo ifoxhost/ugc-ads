@@ -45,6 +45,7 @@ export default function StoryboardStage({ adId, onClose }: Props) {
   const [ad, setAd] = useState<AdRow | null>(null);
   const [scenes, setScenes] = useState<SceneRow[]>([]);
   const [regenLoading, setRegenLoading] = useState<string | null>(null);
+  const [regenAllLoading, setRegenAllLoading] = useState(false);
   const [rendering, setRendering] = useState(false);
 
   // Initial load + realtime subscriptions
@@ -98,6 +99,20 @@ export default function StoryboardStage({ adId, onClose }: Props) {
     }
   };
 
+  const handleRegenAll = async () => {
+    if (!confirm("Re-roll every scene image using the same script and reference inputs?")) return;
+    setRegenAllLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke("regenerate-all-scenes", { body: { adId } });
+      if (error) throw error;
+      toast.success("Re-rolling all scenes…");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to re-roll scenes");
+    } finally {
+      setRegenAllLoading(false);
+    }
+  };
+
   const handleRender = async () => {
     setRendering(true);
     try {
@@ -110,6 +125,8 @@ export default function StoryboardStage({ adId, onClose }: Props) {
       setRendering(false);
     }
   };
+
+
 
   return (
     <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
@@ -193,6 +210,17 @@ export default function StoryboardStage({ adId, onClose }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {onClose && <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>}
+          <Button
+            variant="outline" size="sm"
+            disabled={regenAllLoading || scenes.length === 0 || stage === "rendering"}
+            onClick={handleRegenAll}>
+            {regenAllLoading ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-1" />
+            )}
+            Re-roll all
+          </Button>
           {ad?.generated_video_url ? (
             <Button asChild size="sm">
               <a href={ad.generated_video_url} target="_blank" rel="noreferrer">
