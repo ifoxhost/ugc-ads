@@ -477,6 +477,15 @@ export async function orchestrateLyricVideo(opts: OrchestrateOpts): Promise<void
     await setStage(adId, "storyboard", 45);
     await runStoryboard(adId, opts.songTitle, opts.referenceImageUrls, opts.userId);
 
+    // Auto-heal: retry any scene that didn't end up with a ready image.
+    await healMissingSceneImages(adId, opts.songTitle, opts.referenceImageUrls, opts.userId, 2);
+
+    // Audio validation: storyboard can complete without audio, but the render
+    // stage needs it. Flag missing audio so the UI can prompt the user.
+    if (!opts.audioUrl) {
+      await patchAd(adId, {}, { audioMissing: true });
+    }
+
     await setStage(adId, "ready_to_render", 90);
     await patchAd(adId, { video_status: "queued" });
   } catch (e) {
@@ -486,6 +495,57 @@ export async function orchestrateLyricVideo(opts: OrchestrateOpts): Promise<void
       pipelineError: (e as Error).message.slice(0, 1000),
     });
   }
+}
+
+// ── Validate + heal storyboard images ──────────────────────────────────────
+// After the initial storyboard pass, any scene without `image_url` is retried
+// up to `maxAttempts` times so we always end up with every expected scene.
+export async function healMissingSceneImages(
+  adId: string,
+  songTitle: string,
+  referenceImageUrls: string[],
+  userId: string,
+  maxAttempts = 2,
+): Promise<{ healed: number; stillMissing: number }> {
+  const sb = service();
+  let healed = 0;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data: missing } = await sb.from("video_scenes")
+      .select("id, prompt, regen_count")
+      .eq("ad_id", adId)
+      .or("image_url.is.null,image_status.eq.failed");
+    if (!missing || missing.length === 0) break;
+    for (const s of missing) {
+      try {
+        await sb.from("video_scenes").update({
+          image_status: "generating", error_message: null, failed_step: null,
+        }).eq("id", s.id);
+        const { url } = await generateSceneImage({
+          sceneId: s.id,
+          prompt: s.prompt as SceneSpec["prompt"],
+          referenceImageUrls,
+          songTitle,
+          userId,
+        });
+        await sb.from("video_scenes").update({
+          image_url: url, image_status: "ready",
+          regen_count: (s.regen_count ?? 0) + 1,
+        }).eq("id", s.id);
+        healed++;
+      } catch (e) {
+        await sb.from("video_scenes").update({
+          image_status: "failed",
+          error_message: (e as Error).message.slice(0, 500),
+          failed_step: "nano-banana",
+        }).eq("id", s.id);
+      }
+    }
+  }
+  const { count: stillMissing } = await sb.from("video_scenes")
+    .select("id", { count: "exact", head: true })
+    .eq("ad_id", adId)
+    .or("image_url.is.null,image_status.eq.failed");
+  return { healed, stillMissing: stillMissing ?? 0 };
 }
 
 // ── Re-roll a single scene ─────────────────────────────────────────────────
