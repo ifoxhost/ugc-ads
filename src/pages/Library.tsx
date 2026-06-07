@@ -1782,8 +1782,13 @@ const Library = () => {
                         ) : (
                           <RefreshCw className="h-4 w-4 mr-2" />
                         )}
-                        Re-slice audio
+                        {isActivePhase
+                          ? (phaseLabel[status!.phase] ?? "Re-slicing…")
+                          : reslicing
+                            ? "Re-slicing…"
+                            : "Re-slice audio"}
                       </Button>
+
                     </div>
 
                     {/* Real-time status indicator for Re-slice */}
