@@ -1305,6 +1305,49 @@ const Library = () => {
               </div>
             )}
 
+            {/* Render diagnostics (lyric videos) */}
+            {mediaViewer.ad && isLyricVideo(mediaViewer.ad) && mediaViewer.ad.ad_copy?.stitchValidation && (
+              <div className="p-4 border-t space-y-2">
+                <h3 className="font-semibold text-lg">Render details</h3>
+                {(() => {
+                  const v = mediaViewer.ad!.ad_copy!.stitchValidation!;
+                  const fmt = (n: number | null | undefined, unit = "s") =>
+                    n == null ? "—" : `${Number(n).toFixed(2)}${unit}`;
+                  const within = v.withinTolerance;
+                  return (
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                      <span className="text-muted-foreground">Stitcher</span>
+                      <span className="font-mono">{v.stitcher ?? mediaViewer.ad!.ad_copy!.stitchedBy ?? "—"}</span>
+                      <span className="text-muted-foreground">Requested duration</span>
+                      <span className="font-mono">{fmt(v.requestedDurationSec)}</span>
+                      <span className="text-muted-foreground">Final duration</span>
+                      <span className="font-mono">{fmt(v.measuredDurationSec)}</span>
+                      <span className="text-muted-foreground">Drift</span>
+                      <span className={`font-mono ${within === false ? "text-destructive" : within ? "text-primary" : ""}`}>
+                        {fmt(v.driftSec)} {within === true ? "✓" : within === false ? "⚠" : ""}
+                      </span>
+                      <span className="text-muted-foreground">Tolerance</span>
+                      <span className="font-mono">±{fmt(v.toleranceSec)}</span>
+                      {v.attempts != null && (
+                        <>
+                          <span className="text-muted-foreground">Attempts</span>
+                          <span className="font-mono">{v.attempts}</span>
+                        </>
+                      )}
+                      {v.falAttempts != null && v.falAttempts > 0 && v.stitcher !== "fal.ai/compose" && (
+                        <>
+                          <span className="text-muted-foreground">fal.ai attempts</span>
+                          <span className="font-mono">
+                            {v.falAttempts} (last drift {fmt(v.falLastDriftSec)})
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Actions */}
             <div className="p-4 border-t flex gap-2 justify-end">
               {mediaViewer.url && (
