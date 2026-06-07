@@ -45,20 +45,18 @@ const SunoLinkParser = ({ onParsed, disabled, defaultUrl }: SunoLinkParserProps)
     setResult(null);
 
     try {
-      // Use local backend proxy for parsing (avoids CORS and Supabase function issues)
-      const resp = await fetch(`${BACKEND_URL}/api/suno/parse`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sunoUrl: target }),
+      // Call Supabase edge function for parsing (works in production)
+      const { data, error: fnError } = await supabase.functions.invoke('suno-parse', {
+        body: { sunoUrl: target },
       });
 
-      if (!resp.ok) throw new Error(`Backend returned ${resp.status}`);
-      const data = await resp.json() as ParsedSongData;
+      if (fnError) throw fnError;
+      if (!data) throw new Error('No data returned');
 
-      setResult(data);
-      onParsed(data);
+      setResult(data as ParsedSongData);
+      onParsed(data as ParsedSongData);
 
-      if (!data.success) {
+      if (!(data as ParsedSongData).success) {
         setError("Could not fully extract song data. You can still edit the fields below manually.");
       }
     } catch (err) {
