@@ -176,11 +176,15 @@ serve(async (req) => {
     // === LAST RESORT: publish first clip so credit isn't wasted ===
     const firstUrl = ready[0].videoUrl!;
     console.warn(`[stitch] all stitchers failed ad=${adId} — publishing first clip`);
-    await finalize(sb, ad.id, ad.user_id, firstUrl, adCopy, "first_clip_fallback", null);
+    await finalize(sb, ad.id, ad.user_id, firstUrl, adCopy, "first_clip_fallback", null, {
+      attempts: 0, tolerance: DURATION_TOLERANCE_SEC, requested: totalDuration,
+      falAttempts, falLastDriftSec: lastFalDrift?.delta ?? null,
+    });
     return json({ success: true, videoUrl: firstUrl, via: "first_clip" });
   } catch (e) {
-    console.error("[stitch-lyric-video] fatal:", e);
-    return json({ error: e instanceof Error ? e.message : "Unknown" }, 500);
+    const safe = redact(e instanceof Error ? e.message : "Unknown", falKey);
+    console.error("[stitch-lyric-video] fatal:", safe);
+    return json({ error: safe }, 500);
   }
 
   function json(body: unknown, status = 200) {
