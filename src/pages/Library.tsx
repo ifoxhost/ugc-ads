@@ -1674,12 +1674,7 @@ const Library = () => {
                   const payload = JSON.stringify(
                     { startSec: sl.startSec, durationSec: sl.durationSec, url: sl.url }, null, 2,
                   );
-                  navigator.clipboard.writeText(payload);
-                  toast({ title: `Scene ${Number(sl.index ?? 0) + 1} metadata copied` });
-                };
-                const copyValue = (label: string, value: string) => {
-                  navigator.clipboard.writeText(value);
-                  toast({ title: `${label} copied`, description: value });
+                  copySliceField(payload, `Scene ${Number(sl.index ?? 0) + 1} metadata`, `json-${sl.sceneId}`);
                 };
                 return (
                   <div className="p-4 border-t space-y-3">
