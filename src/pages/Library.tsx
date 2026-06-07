@@ -103,6 +103,21 @@ interface AdCopy {
   }>;
   sceneAudioSlicesGeneratedAt?: string;
   cloudinaryAudio?: { publicId: string; durationSec: number; format: string };
+  sceneAudioJobValidation?: {
+    valid: boolean;
+    totalFiles: number;
+    totalDurationSec: number;
+    limits: { maxFiles: number; maxTotalSec: number; maxPerSliceSec: number };
+    errors: Array<{ sceneId: string; index: number; reason: string; durationSec: number; scope: "scene" | "job" }>;
+  };
+  sliceStatus?: {
+    phase: "queued" | "uploading" | "slicing" | "validating" | "done" | "failed";
+    at?: string;
+    sliceCount?: number;
+    errorCount?: number;
+    error?: string;
+    jobValid?: boolean;
+  };
 }
 
 interface GeneratedAd {
@@ -297,6 +312,16 @@ const Library = () => {
   const closeMediaViewer = () => {
     setMediaViewer({ isOpen: false, type: null, url: null, title: null, ad: null });
   };
+
+  // Keep the open job-details ad in sync with realtime updates (so the
+  // Re-slice audio status panel re-renders as ad_copy.sliceStatus changes).
+  useEffect(() => {
+    if (!mediaViewer.isOpen || !mediaViewer.ad) return;
+    const fresh = ads.find(a => a.id === mediaViewer.ad!.id);
+    if (fresh && fresh !== mediaViewer.ad) {
+      setMediaViewer(mv => mv.ad ? { ...mv, ad: fresh } : mv);
+    }
+  }, [ads, mediaViewer.isOpen, mediaViewer.ad]);
 
   // Track which ad IDs were "processing" so we can detect transitions → completed
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
@@ -1549,7 +1574,7 @@ const Library = () => {
                 const ac = mediaViewer.ad!.ad_copy;
                 const slices = ac?.sceneAudioSlices ?? [];
                 const errors = ac?.sceneAudioSliceErrors ?? [];
-                const hasAny = slices.length > 0 || errors.length > 0 || !!ac?.cloudinaryAudio;
+                const hasAny = slices.length > 0 || errors.length > 0 || !!ac?.cloudinaryAudio || !!ac?.sliceStatus;
                 if (!hasAny) return null;
                 const errorBySceneId = new Map<string, typeof errors>();
                 errors.forEach((e) => {
@@ -1559,6 +1584,35 @@ const Library = () => {
                 });
                 const adId = mediaViewer.ad!.id;
                 const reslicing = reslicingIds.has(adId);
+                const status = ac?.sliceStatus;
+                const jobVal = ac?.sceneAudioJobValidation;
+                const isActivePhase =
+                  status?.phase === "queued" ||
+                  status?.phase === "uploading" ||
+                  status?.phase === "slicing" ||
+                  status?.phase === "validating";
+                const phaseLabel: Record<string, string> = {
+                  queued: "Queued",
+                  uploading: "Uploading audio to Cloudinary…",
+                  slicing: "Generating per-scene slices…",
+                  validating: "Validating against Seedance limits…",
+                  done: "Slicing finished",
+                  failed: "Slicing failed",
+                };
+                const phasePct: Record<string, number> = {
+                  queued: 10, uploading: 35, slicing: 65, validating: 85, done: 100, failed: 100,
+                };
+                const copyMeta = (sl: typeof slices[number]) => {
+                  const payload = JSON.stringify(
+                    { startSec: sl.startSec, durationSec: sl.durationSec, url: sl.url }, null, 2,
+                  );
+                  navigator.clipboard.writeText(payload);
+                  toast({ title: `Scene ${Number(sl.index ?? 0) + 1} metadata copied` });
+                };
+                const copyValue = (label: string, value: string) => {
+                  navigator.clipboard.writeText(value);
+                  toast({ title: `${label} copied`, description: value });
+                };
                 return (
                   <div className="p-4 border-t space-y-3">
                     <div className="flex items-center justify-between">
@@ -1569,10 +1623,10 @@ const Library = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={reslicing}
+                        disabled={reslicing || isActivePhase}
                         onClick={() => handleReslice(mediaViewer.ad!)}
                       >
-                        {reslicing ? (
+                        {(reslicing || isActivePhase) ? (
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         ) : (
                           <RefreshCw className="h-4 w-4 mr-2" />
@@ -1580,6 +1634,37 @@ const Library = () => {
                         Re-slice audio
                       </Button>
                     </div>
+
+                    {/* Real-time status indicator for Re-slice */}
+                    {status && (
+                      <div className={`rounded-md border p-2 text-xs ${
+                        status.phase === "failed" ? "border-destructive/50 bg-destructive/10" :
+                        status.phase === "done" ? "border-primary/40 bg-primary/5" :
+                        "border-amber-500/40 bg-amber-500/5"
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          {isActivePhase ? <Loader2 className="h-3 w-3 animate-spin" /> :
+                           status.phase === "failed" ? <AlertCircle className="h-3 w-3 text-destructive" /> :
+                           <Check className="h-3 w-3 text-primary" />}
+                          <span className="font-medium">{phaseLabel[status.phase] ?? status.phase}</span>
+                          {status.at && (
+                            <span className="text-muted-foreground ml-auto">
+                              {new Date(status.at).toLocaleTimeString()}
+                            </span>
+                          )}
+                        </div>
+                        <Progress value={phasePct[status.phase] ?? 0} className="h-1 mt-2" />
+                        {status.phase === "done" && (
+                          <div className="mt-1 text-muted-foreground">
+                            {status.sliceCount ?? 0} slices • {status.errorCount ?? 0} violations
+                            {status.jobValid === false && " • job invalid"}
+                          </div>
+                        )}
+                        {status.phase === "failed" && status.error && (
+                          <div className="mt-1 text-destructive font-mono">{status.error}</div>
+                        )}
+                      </div>
+                    )}
 
                     {ac?.sceneAudioSlicesGeneratedAt && (
                       <p className="text-xs text-muted-foreground">
@@ -1590,11 +1675,35 @@ const Library = () => {
                       </p>
                     )}
 
+                    {/* Job-level validation summary (server-side) */}
+                    {jobVal && (
+                      <div className={`text-xs rounded-md border p-2 ${jobVal.valid ? "border-primary/30 bg-primary/5" : "border-destructive/50 bg-destructive/10"}`}>
+                        <div className="flex items-center gap-2">
+                          {jobVal.valid
+                            ? <Check className="h-3 w-3 text-primary" />
+                            : <AlertCircle className="h-3 w-3 text-destructive" />}
+                          <span className="font-medium">
+                            Job validation: {jobVal.valid ? "passes" : "fails"} Seedance limits
+                          </span>
+                          <span className="text-muted-foreground ml-auto font-mono">
+                            {jobVal.totalFiles}/{jobVal.limits.maxFiles} files • {jobVal.totalDurationSec.toFixed(2)}/{jobVal.limits.maxTotalSec}s total
+                          </span>
+                        </div>
+                        {!jobVal.valid && (
+                          <ul className="mt-1 pl-4 list-disc">
+                            {jobVal.errors.filter(e => e.scope === "job").map((e, i) => (
+                              <li key={`j${i}`} className="text-destructive">{e.reason}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+
                     {errors.length > 0 && (
                       <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 space-y-1">
                         <div className="text-sm font-medium text-destructive flex items-center gap-2">
                           <AlertCircle className="h-4 w-4" />
-                          {errors.length} slice {errors.length === 1 ? "violation" : "violations"} (max 3 files / 15s each)
+                          {errors.length} per-scene {errors.length === 1 ? "violation" : "violations"} (max 15s each)
                         </div>
                         <ul className="text-xs space-y-1 pl-6 list-disc">
                           {errors.map((e, i) => (
@@ -1611,31 +1720,59 @@ const Library = () => {
                         {slices.map((sl) => {
                           const sErrs = errorBySceneId.get(sl.sceneId) ?? [];
                           const bad = sErrs.length > 0;
+                          const startStr = `${Number(sl.startSec).toFixed(2)}`;
+                          const durStr = `${Number(sl.durationSec).toFixed(2)}`;
                           return (
                             <div key={sl.sceneId} className={`p-2 text-xs ${bad ? "bg-destructive/5" : ""}`}>
                               <div className="flex items-center justify-between gap-2">
                                 <span className="font-medium">
                                   Scene {Number(sl.index ?? 0) + 1}
                                   <span className="text-muted-foreground ml-2 font-mono">
-                                    start {Number(sl.startSec).toFixed(2)}s • dur {Number(sl.durationSec).toFixed(2)}s
+                                    start {startStr}s • dur {durStr}s
                                   </span>
                                 </span>
                                 <div className="flex gap-1 shrink-0">
                                   <Button
                                     size="sm"
                                     variant="ghost"
+                                    className="h-7 px-2 text-[10px]"
+                                    title="Copy start (seconds)"
+                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} start`, startStr)}
+                                  >
+                                    <Clock className="h-3 w-3 mr-1" />start
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-[10px]"
+                                    title="Copy duration (seconds)"
+                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} duration`, durStr)}
+                                  >
+                                    <Clock className="h-3 w-3 mr-1" />dur
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
                                     className="h-7 px-2"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(sl.url);
-                                      toast({ title: "Slice URL copied" });
-                                    }}
+                                    title="Copy slice URL"
+                                    onClick={() => copyValue(`Scene ${Number(sl.index ?? 0) + 1} URL`, sl.url)}
                                   >
                                     <Copy className="h-3 w-3" />
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
+                                    className="h-7 px-2 text-[10px]"
+                                    title="Copy {startSec, durationSec, url} as JSON"
+                                    onClick={() => copyMeta(sl)}
+                                  >
+                                    JSON
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
                                     className="h-7 px-2"
+                                    title="Open slice"
                                     asChild
                                   >
                                     <a href={sl.url} target="_blank" rel="noreferrer">
