@@ -1128,9 +1128,38 @@ const Library = () => {
     setStyleFilter("all");
     setDateFilter("all");
     setEmailFilter("all");
+    setExpiryFilter("all");
+    setDurationFilter("all");
   };
 
-  const hasActiveFilters = searchQuery || statusFilter !== "all" || styleFilter !== "all" || dateFilter !== "all" || (isAdmin && emailFilter !== "all");
+  const hasActiveFilters = searchQuery || statusFilter !== "all" || styleFilter !== "all" || dateFilter !== "all" || expiryFilter !== "all" || durationFilter !== "all" || (isAdmin && emailFilter !== "all");
+
+  // Bulk regenerate of selected lyric video ads
+  const handleBulkRegenerateSelected = async () => {
+    const selectedAds = ads.filter(ad => selectedIds.has(ad.id) && isLyricVideo(ad) && ad.ad_copy);
+    if (selectedAds.length === 0) {
+      toast({
+        title: "No regenerable selections",
+        description: "Select completed or failed AI Music Videos to regenerate.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsBulkRegenerating(true);
+    let queued = 0;
+    for (const ad of selectedAds) {
+      try {
+        await handleRegenerate(ad);
+        queued++;
+      } catch { /* continue */ }
+    }
+    setIsBulkRegenerating(false);
+    setSelectedIds(new Set());
+    toast({
+      title: `Regeneration queued`,
+      description: `${queued} of ${selectedAds.length} videos re-queued.`,
+    });
+  };
 
   if (loading) {
     return (
