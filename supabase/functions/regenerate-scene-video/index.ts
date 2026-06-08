@@ -92,21 +92,36 @@ serve(async (req) => {
       : [];
     const refAudio = slices.find((s) => s.sceneId === scene.id)?.url;
 
-    const taskId = await submitKieClip({
-      kind: kieModel.kind,
-      endpoint: kieModel.endpoint,
-      modelId: kieModel.id,
-      clip: {
-        sceneId: scene.id,
-        index: scene.index,
-        imageUrl: scene.image_url,
-        prompt: promptText,
-        durationSec: clipDur,
-        aspectRatio: aspect,
-        referenceAudioUrl: refAudio,
-        resolution: "720p",
-      },
-    });
+    let taskId: string;
+    try {
+      taskId = await submitKieClip({
+        kind: kieModel.kind,
+        endpoint: kieModel.endpoint,
+        modelId: kieModel.id,
+        clip: {
+          sceneId: scene.id,
+          index: scene.index,
+          imageUrl: scene.image_url,
+          prompt: promptText,
+          durationSec: clipDur,
+          aspectRatio: aspect,
+          referenceAudioUrl: refAudio,
+          resolution: "720p",
+        },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const lower = msg.toLowerCase();
+      if (lower.includes("credits insufficient") || lower.includes("insufficient") || lower.includes("top up")) {
+        console.error("[regenerate-scene-video] Kie.ai provider out of credits:", msg);
+        return json({
+          error: "Video provider (Kie.ai) is temporarily out of credits. Our team has been notified — please try again shortly.",
+          providerError: true,
+          code: "PROVIDER_CREDITS_EXHAUSTED",
+        }, 503);
+      }
+      throw e;
+    }
 
     // Poll up to ~5 minutes. Edge functions can run longer; we cap politely.
     const startedAt = Date.now();
