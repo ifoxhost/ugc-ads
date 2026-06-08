@@ -193,165 +193,130 @@ export default function StoryboardStage({ adId, onClose }: Props) {
             const hasImage = s.image_status === "ready" && !!s.image_url;
             const hasVideo = !!ad?.generated_video_url;
             const isBusy = s.image_status === "generating" || s.image_status === "pending" || regenLoading === s.id;
-            const StepDot = ({ n, label, done, active }: { n: number; label: string; done: boolean; active: boolean }) => (
-              <div className="flex items-center gap-1.5">
-                <div className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border",
-                  done ? "bg-green-500/20 border-green-500/60 text-green-500"
-                    : active ? "bg-primary/20 border-primary text-primary"
-                    : "bg-muted/40 border-border text-muted-foreground"
-                )}>
-                  {done ? <Check className="h-3 w-3" /> : n}
-                </div>
-                <span className={cn(
-                  "text-[10px] font-medium",
-                  done ? "text-green-500" : active ? "text-foreground" : "text-muted-foreground"
-                )}>{label}</span>
-              </div>
-            );
             return (
-              <Card key={s.id} className="overflow-hidden border border-border/80 shadow-md">
-                <CardContent className="p-5 grid lg:grid-cols-2 gap-6 bg-card/15">
-
-                  {/* ──── LEFT: SCENE METADATA & PROMPT ──── */}
-                  <div className="space-y-4 flex flex-col justify-between">
-                    <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                      <div>
-                        <span className="text-xs font-bold text-primary mr-2">SCENE {s.index + 1}</span>
-                        <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-full">
-                          {Math.round(s.start_sec)}s - {Math.round(s.end_sec)}s
-                        </span>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[10px] font-medium",
-                          s.image_status === "ready" && "border-green-500/60 text-green-500 bg-green-500/10",
-                          s.image_status === "generating" && "border-primary/60 text-primary bg-primary/10 animate-pulse",
-                          s.image_status === "failed" && "border-destructive/60 text-destructive bg-destructive/10",
-                          s.image_status === "pending" && "text-muted-foreground"
-                        )}
-                      >
-                        {s.image_status === "ready" ? "Completed"
-                          : s.image_status === "generating" ? "Rendering…"
-                          : s.image_status === "failed" ? "Failed"
-                          : "Queued"}
-                      </Badge>
-                    </div>
-
+              <SceneCard
+                key={s.id}
+                sceneNumber={s.index + 1}
+                timeRange={`${Math.round(s.start_sec)}s - ${Math.round(s.end_sec)}s`}
+                hasImage={hasImage}
+                hasVideo={hasVideo}
+                videoStepLabel="Render Video"
+                showVideoStep
+                headerRight={
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] font-medium",
+                      s.image_status === "ready" && "border-green-500/60 text-green-500 bg-green-500/10",
+                      s.image_status === "generating" && "border-primary/60 text-primary bg-primary/10 animate-pulse",
+                      s.image_status === "failed" && "border-destructive/60 text-destructive bg-destructive/10",
+                      s.image_status === "pending" && "text-muted-foreground",
+                    )}
+                  >
+                    {s.image_status === "ready" ? "Completed"
+                      : s.image_status === "generating" ? "Rendering…"
+                      : s.image_status === "failed" ? "Failed"
+                      : "Queued"}
+                  </Badge>
+                }
+                leftContent={
+                  <>
                     <div className="space-y-1.5">
                       <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Scene Prompt</Label>
                       <p className="text-xs text-foreground/90 bg-background/50 border border-border rounded-xl p-3 font-mono whitespace-pre-wrap break-words">
                         {s.prompt?.story || "—"}
                       </p>
                     </div>
-
                     {s.lyric_lines?.length > 0 && (
                       <div className="space-y-1.5">
                         <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Lyric Lines</Label>
                         <p className="text-[11px] text-muted-foreground italic">"{s.lyric_lines.join(" / ")}"</p>
                       </div>
                     )}
-
                     <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded-lg text-[10px] text-muted-foreground font-mono">
                       <div>Camera: <span className="text-foreground">{s.prompt?.camera || "—"}</span></div>
                       <div>Environment: <span className="text-foreground">{s.prompt?.environment || "—"}</span></div>
                       <div>Grading: <span className="text-foreground">{s.prompt?.colorGrading || "—"}</span></div>
                       <div>VFX: <span className="text-foreground">{s.prompt?.vfx || "—"}</span></div>
                     </div>
-
                     {s.error_message && (
                       <p className="text-[11px] text-destructive line-clamp-3 border-t border-border/30 pt-2">{s.error_message}</p>
                     )}
+                  </>
+                }
+                previewSlot={
+                  s.image_url ? (
+                    <img src={s.image_url} alt={`Scene ${s.index + 1}`} className="w-full h-full object-cover" />
+                  ) : isBusy ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 text-center">
+                      <Loader2 className="h-7 w-7 animate-spin text-primary mb-2" />
+                      <span className="text-[10px] text-white">Rendering scene frame…</span>
+                    </div>
+                  ) : s.image_status === "failed" ? (
+                    <div className="text-center p-6 text-muted-foreground">
+                      <AlertCircle className="h-8 w-8 mx-auto text-destructive/70 mb-2" />
+                      <p className="text-[10px]">Generation failed for this frame.</p>
+                    </div>
+                  ) : (
+                    <div className="text-center p-6 text-muted-foreground">
+                      <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/35 mb-2" />
+                      <p className="text-[10px]">No frame rendered yet.</p>
+                    </div>
+                  )
+                }
+                metadataSlot={
+                  <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded-lg text-[10px] text-muted-foreground font-mono">
+                    <div>Model: <span className="text-foreground">Nano Banana</span></div>
+                    <div>Attempts: <span className="text-foreground">{s.regen_count}</span></div>
+                    <div className="col-span-2">Updated: <span className="text-foreground">{new Date(s.updated_at).toLocaleTimeString()}</span></div>
                   </div>
-
-                  {/* ──── RIGHT: IMAGE PREVIEW & STEP CONTROLS ──── */}
-                  <div className="flex flex-col justify-between border-l border-border/40 pl-0 lg:pl-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                      <span className="font-bold text-foreground flex items-center gap-1.5">
-                        <ImageIcon className="h-4 w-4 text-primary" /> Storyboard Frame Preview
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-semibold">Render Node</span>
-                    </div>
-
-                    <div className="aspect-video rounded-xl overflow-hidden border border-border bg-black relative flex items-center justify-center">
-                      {s.image_url ? (
-                        <img src={s.image_url} alt={`Scene ${s.index + 1}`} className="w-full h-full object-cover" />
-                      ) : isBusy ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 text-center">
-                          <Loader2 className="h-7 w-7 animate-spin text-primary mb-2" />
-                          <span className="text-[10px] text-white">Rendering scene frame…</span>
-                        </div>
-                      ) : s.image_status === "failed" ? (
-                        <div className="text-center p-6 text-muted-foreground">
-                          <AlertCircle className="h-8 w-8 mx-auto text-destructive/70 mb-2" />
-                          <p className="text-[10px]">Generation failed for this frame.</p>
-                        </div>
-                      ) : (
-                        <div className="text-center p-6 text-muted-foreground">
-                          <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/35 mb-2" />
-                          <p className="text-[10px]">No frame rendered yet.</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded-lg text-[10px] text-muted-foreground font-mono">
-                      <div>Model: <span className="text-foreground">Nano Banana</span></div>
-                      <div>Attempts: <span className="text-foreground">{s.regen_count}</span></div>
-                      <div className="col-span-2">Updated: <span className="text-foreground">{new Date(s.updated_at).toLocaleTimeString()}</span></div>
-                    </div>
-
-                    {/* Step indicator */}
-                    <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/20 rounded-lg border border-border/30">
-                      <StepDot n={1} label="Generate Image" done={hasImage} active={!hasImage} />
-                      <div className={cn("flex-1 h-px", hasImage ? "bg-green-500/40" : "bg-border")} />
-                      <StepDot n={2} label="Render Video" done={hasVideo} active={hasImage && !hasVideo} />
-                    </div>
-
-                    {/* Operational buttons */}
-                    <div className="flex justify-between items-center gap-2 pt-2 border-t border-border/30">
-                      <Button
-                        size="sm"
-                        variant={s.image_status === "failed" ? "destructive" : "outline"}
-                        className="h-8 text-[10px] flex-1"
-                        disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
-                        onClick={() => handleRegen(s.id)}
-                      >
-                        {regenLoading === s.id || s.image_status === "generating" ? (
-                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        ) : (
-                          <ImageIcon className="h-3.5 w-3.5 mr-1" />
-                        )}
-                        {s.image_status === "failed"
-                          ? "1) Retry Image"
-                          : hasImage
-                            ? `1) Regenerate Image${s.regen_count > 0 ? ` (${s.regen_count})` : ""}`
-                            : "1) Generate Image"}
-                      </Button>
-                      {s.image_status === "failed" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 px-2"
-                          onClick={() => setDetailsScene(s)}
-                          title="View error details">
-                          <Info className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-[10px]"
-                        disabled
-                        title="Video is rendered for the full storyboard from the action bar below"
-                      >
-                        <Film className="h-3.5 w-3.5 mr-1" />
-                        2) Video (storyboard)
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                }
+                imageButton={
+                  <Button
+                    size="sm"
+                    variant={s.image_status === "failed" ? "destructive" : "outline"}
+                    className="h-8 text-[10px]"
+                    disabled={regenLoading === s.id || s.image_status === "generating" || showRegenAllBusy}
+                    onClick={() => handleRegen(s.id)}
+                  >
+                    {regenLoading === s.id || s.image_status === "generating" ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    {s.image_status === "failed"
+                      ? "1) Retry Image"
+                      : hasImage
+                        ? `1) Regenerate Image${s.regen_count > 0 ? ` (${s.regen_count})` : ""}`
+                        : "1) Generate Image"}
+                  </Button>
+                }
+                midActions={
+                  s.image_status === "failed" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      onClick={() => setDetailsScene(s)}
+                      title="View error details"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : null
+                }
+                videoButton={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-[10px]"
+                    disabled
+                    title="Video is rendered for the full storyboard from the action bar below"
+                  >
+                    <Film className="h-3.5 w-3.5 mr-1" />
+                    2) Video (storyboard)
+                  </Button>
+                }
+              />
             );
           })}
         </div>
