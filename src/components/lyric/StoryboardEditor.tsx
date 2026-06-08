@@ -454,6 +454,11 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
   const handleRegenerateImage = async (clipId: string) => {
     const target = clips.find(c => c.id === clipId);
     if (!target) return;
+    if (sceneLocks.current.has(clipId)) {
+      toast({ title: "Already running", description: `Scene ${target.scene_number} has a job in progress.` });
+      return;
+    }
+    sceneLocks.current.add(clipId);
 
     updateClip(clipId, { status: "processing", progress: 20 });
 
