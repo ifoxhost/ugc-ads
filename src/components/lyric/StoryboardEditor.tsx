@@ -1164,7 +1164,7 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
                       ) : (
                         <Sparkles className="h-3.5 w-3.5 mr-1" />
                       )}
-                      {!clip.start_reference_image ? "Image required" : "Regenerate Scene Video"}
+                      {!clip.start_reference_image ? "2) Image required" : clip.videoUrl ? "2) Regenerate Video" : "2) Generate Video"}
                     </Button>
                   </div>
 
