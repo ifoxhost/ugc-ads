@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Loader2, RefreshCw, Sparkles, Film, Music2,
-  ImageIcon, AlertTriangle, Wand2, Save, Download, Play, Pause, Eye,
+  ImageIcon, AlertTriangle, Check, Wand2, Save, Download, Play, Pause, Eye,
   Lock, Unlock,
 } from "lucide-react";
 import { SceneCard } from "./SceneCard";
