@@ -447,41 +447,30 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                   <Badge variant="outline">Pending</Badge>
                 );
 
+              const hasImage = !!scene.image_url;
               return (
-                <Card key={scene.id} className={`overflow-hidden ${scene.locked ? "border-amber-500/40 bg-amber-500/5" : ""}`}>
-                  <CardContent className="p-4 grid md:grid-cols-[260px_1fr] gap-4">
-                    {/* Image */}
-                    <div className="space-y-2">
-                      <div className="aspect-square rounded-lg border bg-muted/30 overflow-hidden relative">
-                        {scene.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={scene.image_url}
-                            alt={`Scene ${scene.index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
-                            <ImageIcon className="h-8 w-8" />
-                            <span className="text-xs">No image</span>
-                          </div>
-                        )}
-                        {scene.image_status === "generating" && (
-                          <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-primary">
-                          SCENE {scene.index + 1}
-                        </span>
+                <Card
+                  key={scene.id}
+                  className={`overflow-hidden border border-border/80 shadow-md ${
+                    scene.locked ? "border-amber-500/40 bg-amber-500/5" : ""
+                  }`}
+                >
+                  <CardContent className="p-5 grid lg:grid-cols-2 gap-6 bg-card/15">
+                    {/* ── LEFT: SCENE SETTINGS & PROMPT ── */}
+                    <div className="space-y-4 flex flex-col justify-between">
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2">
                         <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-primary">SCENE {scene.index + 1}</span>
+                          <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-full">
+                            {Number(scene.start_sec).toFixed(1)}s - {Number(scene.end_sec).toFixed(1)}s
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
                           {statusBadge}
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-6 w-6"
+                            className="h-7 w-7"
                             title={scene.locked ? "Unlock scene" : "Lock scene"}
                             onClick={() => toggleSceneLock(scene)}
                           >
@@ -493,31 +482,8 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                           </Button>
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full gap-1.5"
-                        onClick={() => regenScene(scene)}
-                        disabled={busy || scene.image_status === "generating"}
-                      >
-                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                        Regenerate image
-                      </Button>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          Reference image URL
-                        </Label>
-                        <Input
-                          value={scene.image_url ?? ""}
-                          onChange={(e) => updateScene(scene.id, { image_url: e.target.value })}
-                          placeholder="https://..."
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
 
-                    {/* Prompt + timing */}
-                    <div className="space-y-3">
+                      {/* Timing row */}
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Start (s)</Label>
@@ -525,7 +491,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                             type="number" min={0} step={0.1}
                             value={scene.start_sec}
                             onChange={(e) => updateScene(scene.id, { start_sec: Number(e.target.value) })}
-                            className="h-8 text-xs"
+                            className="h-8 text-xs rounded-lg border-border bg-card"
                           />
                         </div>
                         <div className="space-y-1">
@@ -534,7 +500,7 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                             type="number" min={0} step={0.1}
                             value={scene.end_sec}
                             onChange={(e) => updateScene(scene.id, { end_sec: Number(e.target.value) })}
-                            className="h-8 text-xs"
+                            className="h-8 text-xs rounded-lg border-border bg-card"
                           />
                         </div>
                       </div>
@@ -545,47 +511,132 @@ export default function StoryboardManager({ ad, onClose, onSave }: Props) {
                         </div>
                       )}
 
-                      {(["story", "camera", "environment", "colorGrading", "vfx"] as const).map((field) => (
-                        <div key={field} className="space-y-1">
-                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{field}</Label>
-                          <textarea
-                            value={(scene.prompt?.[field] as string) ?? ""}
-                            onChange={(e) => updatePromptField(scene.id, field, e.target.value)}
-                            rows={field === "story" ? 3 : 2}
-                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                            placeholder={`Describe ${field}…`}
-                          />
-                        </div>
-                      ))}
+                      {/* Prompt fields */}
+                      <div className="space-y-2">
+                        {(["story", "camera", "environment", "colorGrading", "vfx"] as const).map((field) => (
+                          <div key={field} className="space-y-1">
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{field}</Label>
+                            <textarea
+                              value={(scene.prompt?.[field] as string) ?? ""}
+                              onChange={(e) => updatePromptField(scene.id, field, e.target.value)}
+                              rows={field === "story" ? 3 : 2}
+                              className="w-full rounded-xl border border-border bg-background/50 px-3 py-2 text-xs focus:ring-1 focus:ring-primary focus:outline-none resize-none font-mono"
+                              placeholder={`Describe ${field}…`}
+                            />
+                          </div>
+                        ))}
+                      </div>
 
                       {scene.error_message && (
                         <p className="text-[11px] text-destructive">{scene.error_message}</p>
                       )}
+                    </div>
 
-                      <div className="flex justify-end gap-2">
+                    {/* ── RIGHT: IMAGE PREVIEW & ACTIONS ── */}
+                    <div className="flex flex-col justify-between border-l border-border/40 pl-0 lg:pl-6 space-y-4">
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                        <span className="font-bold text-foreground flex items-center gap-1.5">
+                          <ImageIcon className="h-4 w-4 text-primary" /> Storyboard Frame Preview
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-semibold">Render Node</span>
+                      </div>
+
+                      <div className="aspect-video rounded-xl overflow-hidden border border-border bg-black relative flex items-center justify-center">
+                        {scene.image_url ? (
+                          <img
+                            src={scene.image_url}
+                            alt={`Scene ${scene.index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="text-center p-6 text-muted-foreground">
+                            <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/35 mb-2" />
+                            <p className="text-[10px]">No image generated for this scene.</p>
+                          </div>
+                        )}
+                        {scene.image_status === "generating" && (
+                          <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Reference URL input */}
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                          Reference image URL
+                        </Label>
+                        <Input
+                          value={scene.image_url ?? ""}
+                          onChange={(e) => updateScene(scene.id, { image_url: e.target.value })}
+                          placeholder="https://..."
+                          className="h-8 text-xs rounded-lg border-border bg-card"
+                        />
+                      </div>
+
+                      {/* Step indicator */}
+                      <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/20 rounded-lg border border-border/30">
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                              hasImage
+                                ? "bg-green-500/20 border-green-500/60 text-green-500"
+                                : "bg-primary/20 border-primary text-primary"
+                            }`}
+                          >
+                            {hasImage ? <Check className="h-3 w-3" /> : 1}
+                          </div>
+                          <span className={`text-[10px] font-medium ${hasImage ? "text-green-500" : "text-foreground"}`}>
+                            Generate Image
+                          </span>
+                        </div>
+                        <div className={`flex-1 h-px ${hasImage ? "bg-green-500/40" : "bg-border"}`} />
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border bg-muted/40 border-border text-muted-foreground">
+                            2
+                          </div>
+                          <span className="text-[10px] font-medium text-muted-foreground">Render Clip</span>
+                        </div>
+                      </div>
+
+                      {/* Operational buttons */}
+                      <div className="flex justify-between items-center gap-2 pt-2 border-t border-border/30">
                         <Button
                           size="sm"
-                          variant="secondary"
-                          className="gap-1.5"
-                          onClick={() => saveScene(scene)}
-                          disabled={savingId === scene.id}
+                          variant="outline"
+                          className="h-8 text-[10px] gap-1"
+                          onClick={() => regenScene(scene)}
+                          disabled={busy || scene.image_status === "generating"}
                         >
-                          {savingId === scene.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Save className="h-3.5 w-3.5" />
-                          )}
-                          Save edits
+                          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                          {hasImage ? "1) Regenerate Image" : "1) Generate Image"}
                         </Button>
-                        <Button
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => saveAndRegenScene(scene)}
-                          disabled={savingId === scene.id || busy || scene.image_status === "generating"}
-                        >
-                          <Wand2 className="h-3.5 w-3.5" />
-                          Save & regenerate
-                        </Button>
+
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 text-[10px] gap-1"
+                            onClick={() => saveScene(scene)}
+                            disabled={savingId === scene.id}
+                          >
+                            {savingId === scene.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Save className="h-3.5 w-3.5" />
+                            )}
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-8 text-[10px] gap-1 bg-primary hover:bg-primary/95 text-white"
+                            onClick={() => saveAndRegenScene(scene)}
+                            disabled={savingId === scene.id || busy || scene.image_status === "generating"}
+                          >
+                            <Wand2 className="h-3.5 w-3.5" />
+                            Save & regen
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
