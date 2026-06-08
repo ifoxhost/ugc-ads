@@ -1320,28 +1320,31 @@ const UGCGenerator = () => {
                       </div>
                     )}
 
-                    {/* Storyboard Cards list */}
                     <div className="space-y-6">
                       {activeScenes.map((clip) => {
                         const hasImage = !!clip.start_reference_image;
                         const hasVideo = !!clip.videoUrl;
                         return (
-                          <Card key={clip.id} className="overflow-hidden border border-border/80 shadow-md">
-                            <CardContent className="p-5 grid lg:grid-cols-2 gap-6 bg-card/15">
-                              {/* ── LEFT: SCENE SETTINGS & PROMPT ── */}
-                              <div className="space-y-4 flex flex-col justify-between">
-                                <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-primary">SCENE {clip.scene_number}</span>
-                                    <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-full">
-                                      {(clip.start_time ?? 0).toFixed(1)}s - {(clip.end_time ?? 0).toFixed(1)}s (Duration: {clip.duration || 0}s)
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] text-muted-foreground uppercase font-bold">
-                                    {pipelineSubStep === "script" ? "Script Breakdown" : pipelineSubStep === "images" ? "Image Storyboard" : "Video Storyboard"}
-                                  </span>
-                                </div>
-
+                          <SceneCard
+                            key={clip.id}
+                            sceneNumber={clip.scene_number}
+                            timeRange={`${(clip.start_time ?? 0).toFixed(1)}s - ${(clip.end_time ?? 0).toFixed(1)}s (Duration: ${clip.duration || 0}s)`}
+                            hasImage={hasImage}
+                            hasVideo={hasVideo}
+                            previewTitle={
+                              pipelineSubStep === "videos" ? (
+                                <><Film className="h-4 w-4 text-primary" /> Generated Video Clip Preview</>
+                              ) : (
+                                <><ImageIcon className="h-4 w-4 text-primary" /> Generated Image Frame</>
+                              )
+                            }
+                            headerRight={
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold">
+                                {pipelineSubStep === "script" ? "Script Breakdown" : pipelineSubStep === "images" ? "Image Storyboard" : "Video Storyboard"}
+                              </span>
+                            }
+                            leftContent={
+                              <>
                                 <div className="space-y-1.5">
                                   <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Visual Prompt Directive</Label>
                                   <textarea
@@ -1379,7 +1382,6 @@ const UGCGenerator = () => {
                                   </div>
                                 </div>
 
-                                {/* Reference frame in script step */}
                                 {pipelineSubStep !== "script" && hasImage && (
                                   <div className="space-y-2 border-t border-border/30 pt-3">
                                     <Label className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">Reference Frame</Label>
@@ -1388,109 +1390,61 @@ const UGCGenerator = () => {
                                     </div>
                                   </div>
                                 )}
-                              </div>
-
-                              {/* ── RIGHT: PREVIEW & ACTIONS ── */}
-                              <div className="flex flex-col justify-between border-l border-border/40 pl-0 lg:pl-6 space-y-4">
-                                <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                                  <span className="font-bold text-foreground flex items-center gap-1.5">
-                                    {pipelineSubStep === "videos" ? (
-                                      <><Film className="h-4 w-4 text-primary" /> Generated Video Clip Preview</>
-                                    ) : (
-                                      <><ImageIcon className="h-4 w-4 text-primary" /> Generated Image Frame</>
-                                    )}
+                              </>
+                            }
+                            previewSlot={
+                              clip.status === "processing" ? (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 text-center">
+                                  <Loader2 className="h-7 w-7 animate-spin text-primary mb-2" />
+                                  <span className="text-[10px] text-white">
+                                    {pipelineSubStep === "videos" ? `Rendering Video: ${clip.progress || 10}%` : "Generating frame..."}
                                   </span>
-                                  <span className="text-[10px] text-muted-foreground font-semibold">Render Node</span>
-                                </div>
-
-                                {/* Preview frame */}
-                                <div className="aspect-video rounded-xl overflow-hidden border border-border bg-black relative flex items-center justify-center">
-                                  {clip.status === "processing" ? (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 text-center">
-                                      <Loader2 className="h-7 w-7 animate-spin text-primary mb-2" />
-                                      <span className="text-[10px] text-white">
-                                        {pipelineSubStep === "videos" ? `Rendering Video: ${clip.progress || 10}%` : "Generating frame..."}
-                                      </span>
-                                      {pipelineSubStep === "videos" && (
-                                        <Progress value={clip.progress || 10} className="h-1.5 w-3/4 mt-2" />
-                                      )}
-                                    </div>
-                                  ) : pipelineSubStep === "videos" && clip.videoUrl ? (
-                                    <video src={clip.videoUrl} controls className="w-full h-full object-cover" />
-                                  ) : pipelineSubStep !== "videos" && clip.start_reference_image ? (
-                                    <img src={clip.start_reference_image} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="text-center p-6 text-muted-foreground">
-                                      <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/35 mb-2" />
-                                      <p className="text-[10px]">
-                                        {pipelineSubStep === "videos" ? "No video clip rendered." : "No image generated yet."}
-                                      </p>
-                                    </div>
+                                  {pipelineSubStep === "videos" && (
+                                    <Progress value={clip.progress || 10} className="h-1.5 w-3/4 mt-2" />
                                   )}
                                 </div>
-
-                                {/* Step indicator */}
-                                <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/20 rounded-lg border border-border/30">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className={cn(
-                                      "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border",
-                                      hasImage ? "bg-green-500/20 border-green-500/60 text-green-500"
-                                        : "bg-primary/20 border-primary text-primary"
-                                    )}>
-                                      {hasImage ? <Check className="h-3 w-3" /> : 1}
-                                    </div>
-                                    <span className={cn(
-                                      "text-[10px] font-medium",
-                                      hasImage ? "text-green-500" : "text-foreground"
-                                    )}>Generate Image</span>
-                                  </div>
-                                  <div className={cn("flex-1 h-px", hasImage ? "bg-green-500/40" : "bg-border")} />
-                                  <div className="flex items-center gap-1.5">
-                                    <div className={cn(
-                                      "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border",
-                                      hasVideo ? "bg-green-500/20 border-green-500/60 text-green-500"
-                                        : hasImage ? "bg-primary/20 border-primary text-primary"
-                                        : "bg-muted/40 border-border text-muted-foreground"
-                                    )}>
-                                      {hasVideo ? <Check className="h-3 w-3" /> : 2}
-                                    </div>
-                                    <span className={cn(
-                                      "text-[10px] font-medium",
-                                      hasVideo ? "text-green-500" : hasImage ? "text-foreground" : "text-muted-foreground"
-                                    )}>Generate Video</span>
-                                  </div>
+                              ) : pipelineSubStep === "videos" && clip.videoUrl ? (
+                                <video src={clip.videoUrl} controls className="w-full h-full object-cover" />
+                              ) : pipelineSubStep !== "videos" && clip.start_reference_image ? (
+                                <img src={clip.start_reference_image} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-center p-6 text-muted-foreground">
+                                  <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/35 mb-2" />
+                                  <p className="text-[10px]">
+                                    {pipelineSubStep === "videos" ? "No video clip rendered." : "No image generated yet."}
+                                  </p>
                                 </div>
-
-                                {/* Operational buttons */}
-                                <div className="flex justify-between items-center gap-2 pt-2 border-t border-border/30">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleRegenerateStoryboardAIImage(clip.id)}
-                                    disabled={clip.status === "processing"}
-                                    className="h-8 text-[10px]"
-                                  >
-                                    <ImageIcon className="h-3.5 w-3.5 mr-1" />
-                                    {hasImage ? "1) Regenerate Image" : "1) Generate Image"}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleRegenerateActiveSceneVideo(clip.id)}
-                                    disabled={clip.status === "processing" || !hasImage}
-                                    title={!hasImage ? "Generate the scene image first" : undefined}
-                                    className="h-8 text-[10px] bg-primary hover:bg-primary/95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    {clip.status === "processing" ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                                    ) : (
-                                      <Sparkles className="h-3.5 w-3.5 mr-1" />
-                                    )}
-                                    {!hasImage ? "2) Image required" : hasVideo ? "2) Regenerate Video" : "2) Generate Video"}
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
+                              )
+                            }
+                            imageButton={
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRegenerateStoryboardAIImage(clip.id)}
+                                disabled={clip.status === "processing"}
+                                className="h-8 text-[10px]"
+                              >
+                                <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                                {hasImage ? "1) Regenerate Image" : "1) Generate Image"}
+                              </Button>
+                            }
+                            videoButton={
+                              <Button
+                                size="sm"
+                                onClick={() => handleRegenerateActiveSceneVideo(clip.id)}
+                                disabled={clip.status === "processing" || !hasImage}
+                                title={!hasImage ? "Generate the scene image first" : undefined}
+                                className="h-8 text-[10px] bg-primary hover:bg-primary/95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {clip.status === "processing" ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                                ) : (
+                                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                                )}
+                                {!hasImage ? "2) Image required" : hasVideo ? "2) Regenerate Video" : "2) Generate Video"}
+                              </Button>
+                            }
+                          />
                         );
                       })}
                     </div>
