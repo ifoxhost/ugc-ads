@@ -864,316 +864,266 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
         </div>
 
         <div className="space-y-6">
-          {clips.map((clip) => (
-            <Card key={clip.id} className="overflow-hidden border border-border/80 shadow-md">
-              <CardContent className="p-5 grid lg:grid-cols-2 gap-6 bg-card/15">
-                
-                {/* ──── LEFT SIDE: SCENE SETTINGS & PROMPT ──── */}
-                <div className="space-y-4 flex flex-col justify-between">
-                  <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                    <div>
-                      <span className="text-xs font-bold text-primary mr-2">SCENE {clip.scene_number}</span>
-                      <span className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-full">
-                        {(clip.start_time ?? 0).toFixed(1)}s - {(clip.end_time ?? 0).toFixed(1)}s (Duration: {clip.duration ?? 0}s)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleDuplicateClip(clip)} title="Duplicate Scene">
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleSplitClip(clip.id)} title="Split Scene">
-                        <Scissors className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteClip(clip.id)} title="Delete Scene">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Scene Prompt */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Scene Prompt Prompt (Widescreen Render)</Label>
-                    <textarea
-                      value={clip.prompt}
-                      onChange={(e) => updateClip(clip.id, { prompt: e.target.value })}
-                      placeholder="Describe what visual action is occurring in this scene..."
-                      className="w-full h-20 rounded-xl border border-border bg-background/50 px-3 py-2 text-xs focus:ring-1 focus:ring-primary focus:outline-none resize-none font-mono"
-                    />
-                  </div>
-
-                  {/* Settings dropdowns grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground">Camera Movement</Label>
-                      <select
-                        value={clip.camera_setting}
-                        onChange={(e) => updateClip(clip.id, { camera_setting: e.target.value })}
-                        className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
-                      >
-                        {["Static Tripod", "Dynamic Tracking Push", "Slow Pan Left", "High Angle Crane", "Dolly Zoom Push"].map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground">Motion Flow</Label>
-                      <select
-                        value={clip.motion_setting}
-                        onChange={(e) => updateClip(clip.id, { motion_setting: e.target.value })}
-                        className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
-                      >
-                        {["Slow Flow", "Medium Flow", "Fast Motion", "Strobe Glitch"].map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground">Lighting</Label>
-                      <select
-                        value={clip.lighting_setting}
-                        onChange={(e) => updateClip(clip.id, { lighting_setting: e.target.value })}
-                        className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
-                      >
-                        {["Neon Glow", "Volumetric Daylight", "Cinematic Backlight", "Dark Shadow Lowkey"].map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground">Character Outfit</Label>
-                      <select
-                        value={clip.character_setting}
-                        onChange={(e) => updateClip(clip.id, { character_setting: e.target.value })}
-                        className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
-                      >
-                        {["Reflective Techwear Jacket", "Formal Suit", "Casual Techwear", "Choir Robe"].map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground">Environment Set</Label>
-                      <select
-                        value={clip.environment_setting}
-                        onChange={(e) => updateClip(clip.id, { environment_setting: e.target.value })}
-                        className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
-                      >
-                        {["Cyberpunk Rain Alleyways", "Church Sanctuary", "Urban Warehouse Stage", "Abstract Nebula Space"].map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    {/* Scene duration manual edit */}
-                    <div className="space-y-1">
-                      <Label className="text-muted-foreground">Scene Duration (s)</Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={clip.duration}
-                        onChange={(e) => updateClip(clip.id, { duration: Number(e.target.value) })}
-                        className="h-6 text-[10px] rounded-lg border-border bg-card"
+          {clips.map((clip) => {
+            const hasImage = !!clip.start_reference_image;
+            const hasVideo = !!clip.videoUrl;
+            return (
+              <SceneCard
+                key={clip.id}
+                sceneNumber={clip.scene_number}
+                timeRange={`${(clip.start_time ?? 0).toFixed(1)}s - ${(clip.end_time ?? 0).toFixed(1)}s (Duration: ${clip.duration ?? 0}s)`}
+                hasImage={hasImage}
+                hasVideo={hasVideo}
+                previewTitle={<><Video className="h-4 w-4 text-primary" /> Generated Video Clip Preview</>}
+                headerRight={
+                  <>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleDuplicateClip(clip)} title="Duplicate Scene">
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleSplitClip(clip.id)} title="Split Scene">
+                      <Scissors className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteClip(clip.id)} title="Delete Scene">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                }
+                leftContent={
+                  <>
+                    {/* Scene Prompt */}
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Scene Prompt (Widescreen Render)</Label>
+                      <textarea
+                        value={clip.prompt}
+                        onChange={(e) => updateClip(clip.id, { prompt: e.target.value })}
+                        placeholder="Describe what visual action is occurring in this scene..."
+                        className="w-full h-20 rounded-xl border border-border bg-background/50 px-3 py-2 text-xs focus:ring-1 focus:ring-primary focus:outline-none resize-none font-mono"
                       />
                     </div>
-                  </div>
 
-                  {/* Character Consistency Reference frames */}
-                  <div className="space-y-2 border-t border-border/30 pt-3">
-                    <Label className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">Consistency reference frames</Label>
-                    {(() => {
-                      const bucketRefs: string[] = Array.from(new Set([
-                        ...((ad.ad_copy?.referenceImages as string[] | undefined) ?? []),
-                        ...((ad.ad_copy?.pexelsBackgroundUrls as string[] | undefined) ?? []),
-                        ad.ad_copy?.referenceImageUrl as string | undefined,
-                        ad.ad_copy?.pexelsBackgroundUrl as string | undefined,
-                        clip.start_reference_image,
-                        clip.end_reference_image,
-                      ].filter((u): u is string => typeof u === "string" && u.length > 0)));
-                      const fallback = bucketRefs[0] || "/placeholder.svg";
-                      return (
-                        <div className="grid grid-cols-2 gap-3">
-                          {/* Start frame slot */}
-                          <div className="space-y-1">
-                            <span className="text-[8px] text-muted-foreground block">Start Reference Frame</span>
-                            <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
-                              <img src={clip.start_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
-                              <div className="flex-1 min-w-0">
-                                <span className="text-[9px] truncate block text-muted-foreground">Start Anchor</span>
-                              </div>
-                              <select
-                                value={clip.start_reference_image || ""}
-                                onChange={(e) => updateClip(clip.id, { start_reference_image: e.target.value })}
-                                className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
-                              >
-                                {bucketRefs.length === 0 && <option value="">—</option>}
-                                {bucketRefs.map((u, i) => (
-                                  <option key={`s-${i}`} value={u}>Ref {i + 1}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-
-                          {/* End frame slot */}
-                          <div className="space-y-1">
-                            <span className="text-[8px] text-muted-foreground block">End Reference Frame</span>
-                            <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
-                              <img src={clip.end_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
-                              <div className="flex-1 min-w-0">
-                                <span className="text-[9px] truncate block text-muted-foreground">End Anchor</span>
-                              </div>
-                              <select
-                                value={clip.end_reference_image || ""}
-                                onChange={(e) => updateClip(clip.id, { end_reference_image: e.target.value })}
-                                className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
-                              >
-                                {bucketRefs.length === 0 && <option value="">—</option>}
-                                {bucketRefs.map((u, i) => (
-                                  <option key={`e-${i}`} value={u}>Ref {i + 1}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Versions history dropdown */}
-                  {sceneVersions[clip.id] && sceneVersions[clip.id].length > 0 && (
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1.5 border-t border-border/30">
-                      <History className="h-3.5 w-3.5 text-primary" />
-                      <span>Version History:</span>
-                      <select
-                        onChange={(e) => {
-                          const v = sceneVersions[clip.id].find(v => v.id === e.target.value);
-                          if (v) handleRestoreVersion(clip.id, v);
-                        }}
-                        className="bg-muted/40 border border-border/50 rounded-md px-1.5 py-0.5"
-                      >
-                        <option value="">Restore version...</option>
-                        {sceneVersions[clip.id].map((v) => (
-                          <option key={v.id} value={v.id}>
-                            Version {v.version_number} ({v.type.toUpperCase()})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                </div>
-
-                {/* ──── RIGHT SIDE: RENDER VIEW PLAYER & DETAILS ──── */}
-                <div className="flex flex-col justify-between border-l border-border/40 pl-0 lg:pl-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                    <span className="font-bold text-foreground flex items-center gap-1.5">
-                      <Video className="h-4 w-4 text-primary" /> Generated Video Clip Preview
-                    </span>
-                    <span className="text-[10px] text-muted-foreground font-semibold">Render Node</span>
-                  </div>
-
-                  {/* Video Player Box */}
-                  <div className="aspect-video rounded-xl overflow-hidden border border-border bg-black relative flex items-center justify-center">
-                    {clip.status === "processing" ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 text-center">
-                        <Loader2 className="h-7 w-7 animate-spin text-primary mb-2" />
-                        <span className="text-[10px] text-white">AI Rendering Video Clip: {clip.progress || 10}%</span>
-                        <Progress value={clip.progress || 10} className="h-1.5 w-3/4 mt-2" />
+                    {/* Settings dropdowns grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground">Camera Movement</Label>
+                        <select
+                          value={clip.camera_setting}
+                          onChange={(e) => updateClip(clip.id, { camera_setting: e.target.value })}
+                          className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
+                        >
+                          {["Static Tripod", "Dynamic Tracking Push", "Slow Pan Left", "High Angle Crane", "Dolly Zoom Push"].map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
                       </div>
-                    ) : clip.videoUrl ? (
-                      <video src={clip.videoUrl} controls className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center p-6 text-muted-foreground">
-                        <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/35 mb-2" />
-                        <p className="text-[10px]">No video clip rendered for this scene card.</p>
-                        <p className="text-[9px] text-muted-foreground mt-0.5">Configure settings and click "Regenerate Scene" to render.</p>
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground">Motion Flow</Label>
+                        <select
+                          value={clip.motion_setting}
+                          onChange={(e) => updateClip(clip.id, { motion_setting: e.target.value })}
+                          className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
+                        >
+                          {["Slow Flow", "Medium Flow", "Fast Motion", "Strobe Glitch"].map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground">Lighting</Label>
+                        <select
+                          value={clip.lighting_setting}
+                          onChange={(e) => updateClip(clip.id, { lighting_setting: e.target.value })}
+                          className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
+                        >
+                          {["Neon Glow", "Volumetric Daylight", "Cinematic Backlight", "Dark Shadow Lowkey"].map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground">Character Outfit</Label>
+                        <select
+                          value={clip.character_setting}
+                          onChange={(e) => updateClip(clip.id, { character_setting: e.target.value })}
+                          className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
+                        >
+                          {["Reflective Techwear Jacket", "Formal Suit", "Casual Techwear", "Choir Robe"].map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground">Environment Set</Label>
+                        <select
+                          value={clip.environment_setting}
+                          onChange={(e) => updateClip(clip.id, { environment_setting: e.target.value })}
+                          className="w-full border border-border bg-card px-2 py-1 rounded-lg focus:outline-none"
+                        >
+                          {["Cyberpunk Rain Alleyways", "Church Sanctuary", "Urban Warehouse Stage", "Abstract Nebula Space"].map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground">Scene Duration (s)</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={clip.duration}
+                          onChange={(e) => updateClip(clip.id, { duration: Number(e.target.value) })}
+                          className="h-6 text-[10px] rounded-lg border-border bg-card"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Character Consistency Reference frames */}
+                    <div className="space-y-2 border-t border-border/30 pt-3">
+                      <Label className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">Consistency reference frames</Label>
+                      {(() => {
+                        const bucketRefs: string[] = Array.from(new Set([
+                          ...((ad.ad_copy?.referenceImages as string[] | undefined) ?? []),
+                          ...((ad.ad_copy?.pexelsBackgroundUrls as string[] | undefined) ?? []),
+                          ad.ad_copy?.referenceImageUrl as string | undefined,
+                          ad.ad_copy?.pexelsBackgroundUrl as string | undefined,
+                          clip.start_reference_image,
+                          clip.end_reference_image,
+                        ].filter((u): u is string => typeof u === "string" && u.length > 0)));
+                        const fallback = bucketRefs[0] || "/placeholder.svg";
+                        return (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <span className="text-[8px] text-muted-foreground block">Start Reference Frame</span>
+                              <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
+                                <img src={clip.start_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[9px] truncate block text-muted-foreground">Start Anchor</span>
+                                </div>
+                                <select
+                                  value={clip.start_reference_image || ""}
+                                  onChange={(e) => updateClip(clip.id, { start_reference_image: e.target.value })}
+                                  className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
+                                >
+                                  {bucketRefs.length === 0 && <option value="">—</option>}
+                                  {bucketRefs.map((u, i) => (
+                                    <option key={`s-${i}`} value={u}>Ref {i + 1}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[8px] text-muted-foreground block">End Reference Frame</span>
+                              <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-1">
+                                <img src={clip.end_reference_image || fallback} className="w-8 h-8 rounded object-cover" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[9px] truncate block text-muted-foreground">End Anchor</span>
+                                </div>
+                                <select
+                                  value={clip.end_reference_image || ""}
+                                  onChange={(e) => updateClip(clip.id, { end_reference_image: e.target.value })}
+                                  className="bg-transparent border-none text-[8px] max-w-[60px] focus:outline-none"
+                                >
+                                  {bucketRefs.length === 0 && <option value="">—</option>}
+                                  {bucketRefs.map((u, i) => (
+                                    <option key={`e-${i}`} value={u}>Ref {i + 1}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Versions history dropdown */}
+                    {sceneVersions[clip.id] && sceneVersions[clip.id].length > 0 && (
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1.5 border-t border-border/30">
+                        <History className="h-3.5 w-3.5 text-primary" />
+                        <span>Version History:</span>
+                        <select
+                          onChange={(e) => {
+                            const v = sceneVersions[clip.id].find(v => v.id === e.target.value);
+                            if (v) handleRestoreVersion(clip.id, v);
+                          }}
+                          className="bg-muted/40 border border-border/50 rounded-md px-1.5 py-0.5"
+                        >
+                          <option value="">Restore version...</option>
+                          {sceneVersions[clip.id].map((v) => (
+                            <option key={v.id} value={v.id}>
+                              Version {v.version_number} ({v.type.toUpperCase()})
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     )}
-                  </div>
-
-                  {/* Rendering Metadata stats */}
+                  </>
+                }
+                previewSlot={
+                  clip.status === "processing" ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 p-4 text-center">
+                      <Loader2 className="h-7 w-7 animate-spin text-primary mb-2" />
+                      <span className="text-[10px] text-white">AI Rendering Video Clip: {clip.progress || 10}%</span>
+                      <Progress value={clip.progress || 10} className="h-1.5 w-3/4 mt-2" />
+                    </div>
+                  ) : clip.videoUrl ? (
+                    <video src={clip.videoUrl} controls className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-center p-6 text-muted-foreground">
+                      <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground/35 mb-2" />
+                      <p className="text-[10px]">No video clip rendered for this scene card.</p>
+                      <p className="text-[9px] text-muted-foreground mt-0.5">Configure settings and click "Regenerate Scene" to render.</p>
+                    </div>
+                  )
+                }
+                metadataSlot={
                   <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded-lg text-[10px] text-muted-foreground font-mono">
                     <div>Model: <span className="text-foreground">{clip.model_used || "Kling 3.0"}</span></div>
                     <div>Seed: <span className="text-foreground">{clip.seed || 1234567}</span></div>
                     <div>Render Time: <span className="text-foreground">{clip.generation_time || "4.2s"}</span></div>
                     <div>Prompt Version: <span className="text-foreground">V{clip.prompt_version || 1}</span></div>
                   </div>
-
-                  {/* Step indicator — enforces order: image first, then video */}
-                  {(() => {
-                    const hasImage = !!clip.start_reference_image;
-                    const hasVideo = !!clip.videoUrl;
-                    const StepDot = ({ n, label, done, active }: { n: number; label: string; done: boolean; active: boolean }) => (
-                      <div className="flex items-center gap-1.5">
-                        <div className={cn(
-                          "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border",
-                          done ? "bg-green-500/20 border-green-500/60 text-green-500"
-                            : active ? "bg-primary/20 border-primary text-primary"
-                            : "bg-muted/40 border-border text-muted-foreground"
-                        )}>
-                          {done ? <Check className="h-3 w-3" /> : n}
-                        </div>
-                        <span className={cn(
-                          "text-[10px] font-medium",
-                          done ? "text-green-500" : active ? "text-foreground" : "text-muted-foreground"
-                        )}>{label}</span>
-                      </div>
-                    );
-                    return (
-                      <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/20 rounded-lg border border-border/30">
-                        <StepDot n={1} label="Generate Image" done={hasImage} active={!hasImage} />
-                        <div className={cn("flex-1 h-px", hasImage ? "bg-green-500/40" : "bg-border")} />
-                        <StepDot n={2} label="Generate Video" done={hasVideo} active={hasImage && !hasVideo} />
-                      </div>
-                    );
-                  })()}
-
-                  {/* Render operational buttons */}
-                  <div className="flex justify-between items-center gap-2 pt-2 border-t border-border/30">
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRegenerateImage(clip.id)}
-                        disabled={clip.status === "processing"}
-                        className="h-8 text-[10px]"
-                      >
-                        <ImageIcon className="h-3.5 w-3.5 mr-1" />
-                        {clip.start_reference_image ? "1) Regenerate Image" : "1) Generate Image"}
-                      </Button>
-                      
-                      {clip.videoUrl && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.open(clip.videoUrl!, "_blank")}
-                          className="h-8 text-[10px]"
-                        >
-                          <Download className="h-3.5 w-3.5 mr-1" /> Download
-                        </Button>
-                      )}
-                    </div>
-
+                }
+                imageButton={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRegenerateImage(clip.id)}
+                    disabled={clip.status === "processing"}
+                    className="h-8 text-[10px]"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                    {hasImage ? "1) Regenerate Image" : "1) Generate Image"}
+                  </Button>
+                }
+                midActions={
+                  clip.videoUrl ? (
                     <Button
                       size="sm"
-                      onClick={() => handleRegenerateSceneVideo(clip.id)}
-                      disabled={clip.status === "processing" || !clip.start_reference_image}
-                      title={!clip.start_reference_image ? "Generate the scene image first" : undefined}
-                      className="h-8 text-[10px] bg-primary hover:bg-primary/95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      variant="outline"
+                      onClick={() => window.open(clip.videoUrl!, "_blank")}
+                      className="h-8 text-[10px]"
                     >
-                      {clip.status === "processing" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                      ) : (
-                        <Sparkles className="h-3.5 w-3.5 mr-1" />
-                      )}
-                      {!clip.start_reference_image ? "2) Image required" : clip.videoUrl ? "2) Regenerate Video" : "2) Generate Video"}
+                      <Download className="h-3.5 w-3.5 mr-1" /> Download
                     </Button>
-                  </div>
-
-                </div>
-
-              </CardContent>
-            </Card>
-          ))}
+                  ) : null
+                }
+                videoButton={
+                  <Button
+                    size="sm"
+                    onClick={() => handleRegenerateSceneVideo(clip.id)}
+                    disabled={clip.status === "processing" || !hasImage}
+                    title={!hasImage ? "Generate the scene image first" : undefined}
+                    className="h-8 text-[10px] bg-primary hover:bg-primary/95 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {clip.status === "processing" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    {!hasImage ? "2) Image required" : hasVideo ? "2) Regenerate Video" : "2) Generate Video"}
+                  </Button>
+                }
+              />
+            );
+          })}
         </div>
       </div>
     </div>
