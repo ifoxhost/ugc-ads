@@ -1097,6 +1097,35 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
                     <div>Prompt Version: <span className="text-foreground">V{clip.prompt_version || 1}</span></div>
                   </div>
 
+                  {/* Step indicator — enforces order: image first, then video */}
+                  {(() => {
+                    const hasImage = !!clip.start_reference_image;
+                    const hasVideo = !!clip.videoUrl;
+                    const StepDot = ({ n, label, done, active }: { n: number; label: string; done: boolean; active: boolean }) => (
+                      <div className="flex items-center gap-1.5">
+                        <div className={cn(
+                          "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border",
+                          done ? "bg-green-500/20 border-green-500/60 text-green-500"
+                            : active ? "bg-primary/20 border-primary text-primary"
+                            : "bg-muted/40 border-border text-muted-foreground"
+                        )}>
+                          {done ? <Check className="h-3 w-3" /> : n}
+                        </div>
+                        <span className={cn(
+                          "text-[10px] font-medium",
+                          done ? "text-green-500" : active ? "text-foreground" : "text-muted-foreground"
+                        )}>{label}</span>
+                      </div>
+                    );
+                    return (
+                      <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/20 rounded-lg border border-border/30">
+                        <StepDot n={1} label="Generate Image" done={hasImage} active={!hasImage} />
+                        <div className={cn("flex-1 h-px", hasImage ? "bg-green-500/40" : "bg-border")} />
+                        <StepDot n={2} label="Generate Video" done={hasVideo} active={hasImage && !hasVideo} />
+                      </div>
+                    );
+                  })()}
+
                   {/* Render operational buttons */}
                   <div className="flex justify-between items-center gap-2 pt-2 border-t border-border/30">
                     <div className="flex gap-2">
@@ -1107,7 +1136,8 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
                         disabled={clip.status === "processing"}
                         className="h-8 text-[10px]"
                       >
-                        <ImageIcon className="h-3.5 w-3.5 mr-1" /> Regenerate Image
+                        <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                        {clip.start_reference_image ? "1) Regenerate Image" : "1) Generate Image"}
                       </Button>
                       
                       {clip.videoUrl && (
