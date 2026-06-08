@@ -501,6 +501,8 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
         description: err instanceof Error ? err.message : "Failed to regenerate scene image.",
         variant: "destructive",
       });
+    } finally {
+      sceneLocks.current.delete(clipId);
     }
   };
 
@@ -511,6 +513,19 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
   const handleRegenerateSceneVideo = async (clipId: string) => {
     const target = clips.find(c => c.id === clipId);
     if (!target) return;
+    if (sceneLocks.current.has(clipId)) {
+      toast({ title: "Already running", description: `Scene ${target.scene_number} has a job in progress.` });
+      return;
+    }
+    if (!target.start_reference_image) {
+      toast({
+        title: "Image required",
+        description: `Generate the image for Scene ${target.scene_number} first.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    sceneLocks.current.add(clipId);
 
     updateClip(clipId, { status: "processing", progress: 15 });
 
@@ -561,6 +576,8 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
         description: err instanceof Error ? err.message : "Failed to trigger video generation.",
         variant: "destructive",
       });
+    } finally {
+      sceneLocks.current.delete(clipId);
     }
   };
 
