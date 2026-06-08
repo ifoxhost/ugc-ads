@@ -5,6 +5,9 @@ import { Loader2, RefreshCw, Sparkles, AlertCircle, CheckCircle2, PlayCircle, In
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Check, Image as ImageIcon, Film } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type SceneRow = {
   id: string;
