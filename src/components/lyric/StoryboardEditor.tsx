@@ -161,6 +161,9 @@ export default function StoryboardEditor({ ad, onClose, onSave }: StoryboardEdit
   // Export options
   const [exportRes, setExportRes] = useState<string>("1080p");
   const [exportFps, setExportFps] = useState<number>(30);
+  // Per-scene action lock — synchronous Set ref so a fast double-click can't
+  // start two jobs on the same scene before React re-renders.
+  const sceneLocks = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const duration = ad.video_duration || ad.duration || 60;
