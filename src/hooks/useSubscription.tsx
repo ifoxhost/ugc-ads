@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const useSubscription = () => {
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { user: authUser, loading: authLoading } = useAuth();
 
   useEffect(() => {
     const checkSubscription = async () => {
@@ -49,10 +51,10 @@ export const useSubscription = () => {
       }
     };
 
-    if (!roleLoading) {
+    if (!roleLoading && !authLoading) {
       checkSubscription();
     }
-  }, [isAdmin, roleLoading]);
+  }, [isAdmin, roleLoading, authLoading, authUser?.id]);
 
-  return { hasActiveSubscription, loading: loading || roleLoading };
+  return { hasActiveSubscription, loading: loading || roleLoading || authLoading };
 };
