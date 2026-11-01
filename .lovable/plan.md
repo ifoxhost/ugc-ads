@@ -1,53 +1,62 @@
-## Problem
-Two real bugs in the current Kie.ai render path (`supabase/functions/_shared/pipeline.ts → submitKieRender`):
+# UGC Ads Studio revamp
 
-1. **Imported Suno audio is never sent to the renderer.** `params.audioUrl` is built in `render-lyric-video/index.ts` but `submitKieRender` ignores it. It also sets `sound: true`, so Kling auto-generates its own soundtrack.
-2. **Output duration is always 5 or 10 seconds and only one scene image is used.** `klingDuration()` clamps to `"5"` or `"10"`, and only `storyboard[0].imageUrl` is passed to Kling. The remaining 5–7 storyboard frames are discarded, so a 3:54 song becomes a 5–10s clip of the first frame.
+## Confirmed direction
+- Rename the product **UGC Ads Studio** and replace music-video creation with product-focused UGC ad creation.
+- **Keep current billing:** preserve Stripe products, plan prices, allowances, subscriptions, and existing credit charges. Update the wording, not the paid entitlements.
+- Preserve user accounts, saved assets, notifications, and trash. Do not delete historical projects or their stored media during cleanup.
 
-Kling itself does **not** accept a custom audio track and caps each job at 10s, so we must change the render strategy — not just the parameters.
+## 1. Replace the creation experience
+Rebuild `/create` as four stages using the existing UGC upload, creator, format, and gallery controls:
 
-## Fix — per-scene Kling clips, then stitch + mux the imported audio
+1. **Product & Offer:** product images, product link, name, audience, main benefit, offer, and CTA. Retain multiple product angles and support transparent PNG inputs. A product page link must be imported successfully or clearly marked for manual completion—not treated as an image URL.
+2. **Script & Hooks:** generate three editable hook/body/CTA script variants and five hook alternatives using supplied product facts. Regenerate or choose a variant without discarding edits to the other variants. Avoid invented discounts, testimonials, or product claims.
+3. **Creator & Setting:** gender, age, ethnicity/look, tone, background setting, ad framework, and aspect ratio; default to 9:16. Include image-ad and video-ad paths without mixing their settings.
+4. **Generation & Preview:** submit real generation requests, display actual status changes, preview returned media, and download the video, script, and caption. Clearly distinguish a draft preview from a completed render.
 
-### Scene planning (already partly in place)
-- `runScript()` keeps producing up to 8 scenes, but we'll size them to the song:
-  - `sceneCount = clamp(ceil(duration / 8), 4, 12)` (raise `MAX_SCENES` to 12).
-  - `start_sec`/`end_sec` are spaced evenly across `duration`; OpenAI is instructed to honor those bounds.
-- Persist final scene timing back to `video_scenes` so the renderer trusts the DB, not the model.
+Keep generation buttons usable for unsubscribed users, opening the existing plan dialog rather than bypassing subscription checks.
 
-### Render (rewrite `render-lyric-video` + `submitKieRender`)
-- For each `video_scenes` row:
-  - Compute `clipSec = round(end_sec - start_sec)` and clamp to Kling's allowed `"5"` or `"10"`.
-  - Submit one Kling **image-to-video** job per scene with that scene's `image_url`, `sound: false`, and a scene-specific prompt.
-- Store the list of Kie task ids on `generated_ads.ad_copy.kieTasks = [{sceneId, taskId, durationSec}]` and set a new `ad_copy.renderPlan = { audioUrl, totalDurationSec, scenes:[…] }`.
-- Set `video_status = "processing"`, `pipelineStage = "rendering"`.
+## 2. Make the UGC generation path reliable
+- Reconcile the new product/script/creator fields with the existing UGC request and callback contracts.
+- Verify the existing external video workflow before presenting duration, resolution, voice, or caption options as supported.
+- Persist ad metadata and actual output status with the owning user's job. Ensure the Library can read back a completed job, not just display a submission confirmation.
+- Check ownership, input validation, credit enforcement, duplicate submissions, provider failures, callback handling, and retry behavior without changing current charges.
+- Use current image-generation capabilities for product reference imagery, passing the actual product photos rather than generating an unrelated product from text.
+- Implement caption alignment and subtitle export where supported; do not claim burned-in captions, SRT, 1080p, or 60-second output until those capabilities are implemented and verified.
+- Keep standalone audio-generation features removed.
 
-### Poll + finalize (`poll-lyric-video-status`)
-- Poll every `kieTasks[*].taskId`. When all succeed, download each MP4 to the `generated-images` bucket (new prefix `renders/{adId}/clip-{i}.mp4`).
-- Call a new **`stitch-lyric-video`** edge function that:
-  1. Downloads all clip URLs + the original `audioUrl` (Suno mp3).
-  2. Uses **Shotstack's Edit API** (already have `SHOTSTACK_API_KEY` in secrets — repurposed only for stitching, not generation) to build a timeline:
-     - Video track: clips concatenated in scene order, each trimmed to its `durationSec`, total length = song length.
-     - If clips total < song length, loop the last clip or stretch with `fit: "cover"` to fill.
-     - Audio track: the Suno mp3 spanning `0..duration`, replaces any clip audio.
-  3. Submits the render, polls Shotstack, stores the final mp4 URL on `generated_ads.generated_video_url`.
-  4. Marks `status = "completed"`, `video_status = "completed"`, `pipelineStage = "done"`, and calls `consume_credit`.
-- If Shotstack isn't reachable, fall back to publishing the **first clip muxed with audio via Cloudinary's `l_video` + `au_*` URL transform** (no extra secret — uses `referenceImages` bucket's public delivery). This guarantees the user always gets a video whose length and audio match the song.
+## 3. Rebrand the public pages and navigation
+- Replace the homepage's music carousel with product-focused vertical ad imagery, a prominent UGC Ads Studio heading, and **Create UGC Ad** / **View Ad Examples** actions.
+- Showcase creator story, unboxing, problem/solution, listicle, before/after, and aesthetic routine frameworks.
+- Reuse existing UGC visual assets; label illustrative examples appropriately. Remove fabricated customer counts, ratings, testimonials, and performance claims. Add real testimonials only when supplied.
+- Update the header, sidebar, footer, dashboard, help/about copy, pricing descriptions, FAQ, and page metadata. Remove obsolete social links and links to nonexistent pages.
+- Answer commercial-use questions accurately: user-provided assets, provider terms, and ad-platform policies still apply. Do not promise unconditional rights or guaranteed ROAS.
 
-### Frontend
-- No UI change beyond the existing render-progress bar; it already polls `video_progress`. We'll bump progress in stages: 60 (clips submitted) → 80 (all clips ready) → 95 (stitching) → 100 (done).
+## 4. Align Library and Dashboard with ads
+- Show product name, framework/angle, aspect ratio, creation date, actual video duration, generation status, and export actions.
+- Preserve existing selection, batch export, trash, undo, and expiry behavior.
+- Add **Duplicate with new hook**, reopening an editable product/script draft; generation occurs only after the user confirms.
+- Add editable campaign and performance notes saved with the ad.
+- Remove music-only tabs, lyric players, Suno re-slicing controls, and music regeneration actions from the active UGC experience. Keep historical assets accessible without silently converting them into UGC projects.
 
-## Files touched
-- `supabase/functions/_shared/pipeline.ts` — scene sizing, `submitKieRender` per-scene loop, `sound:false`, new helpers `submitKieRenderBatch`, `downloadClip`.
-- `supabase/functions/render-lyric-video/index.ts` — orchestrates the per-scene submission and writes `kieTasks` + `renderPlan`.
-- `supabase/functions/poll-lyric-video-status/index.ts` — polls every task, triggers stitching when all are ready, no longer assumes a single task id.
-- `supabase/functions/stitch-lyric-video/index.ts` — **new**. Shotstack timeline + Suno audio mux, with Cloudinary fallback.
-- `supabase/config.toml` — register the new function.
-- `docs/pipelines/kie-render.md`, `docs/pipelines/orchestrator.md` — document the per-scene + stitch flow.
+## 5. Retire the legacy music workflow safely
+- Remove active imports and routes to music creation first.
+- Archive or remove obsolete lyric/Suno/BPM frontend modules after checking all callers.
+- Leave legacy stored records and functions needed to finish already-running jobs intact; do not remove shared callbacks or storage used by UGC ads.
+- Consolidate ad draft, script, preview, and request handling into focused reusable UGC modules; record structural conventions in project rules.
 
-## Out of scope
-- True lyric-synced subtitles burned into the video (the transcription is stored but not yet rendered as captions). Easy follow-up once stitching works.
-- Replacing Kling with Veo for built-in audio — keeps current model choice intact.
+## Technical approach
+- Keep React + Vite, existing design-system controls, Lovable Cloud, and Stripe.
+- Store new ad metadata in the existing `generated_ads.ad_copy` structure where appropriate, preserving unrelated metadata when saving notes or edits.
+- Keep provider credentials and AI script generation server-side. Validate authenticated ownership in every new generation or mutation handler.
+- Prefer realtime job subscriptions with cleanup and reconnection; show real stages rather than simulated progress or guaranteed completion times.
+- Use semantic design tokens, the existing dark/coral identity, and consistent compact controls; remove decorative purple gradients and music imagery from the redesigned pages.
 
-## Risk
-- Shotstack render adds ~1–2 min to total wall time. We surface this in the progress bar.
-- Per-scene Kling submission multiplies Kie cost by `sceneCount`. We cap at 12 scenes.
+## Acceptance checks
+- Signed-in user completes product → script → creator → generation → Library readback with real input and a real provider result.
+- Test concrete rules: default 9:16, three script variants, five hook alternatives, unchanged billing, ownership isolation, and draft duplication without an automatic generation charge.
+- Verify multi-image inputs, script edits, downloads, campaign-note persistence, batch actions, and unsubscribed plan dialogs.
+- Check public pages and the authenticated studio at desktop and mobile sizes for overflow, missing imagery, and navigation errors.
+- Run targeted tests and inspect preview errors before calling the revamp complete.
+
+## External dependencies
+The existing UGC video path calls an external automation workflow whose generation limits and output capabilities are not established by the repository. If it is unavailable or lacks required capabilities, report the specific gap rather than displaying a fake successful render. Real testimonials and marketing performance figures require supplied evidence.
