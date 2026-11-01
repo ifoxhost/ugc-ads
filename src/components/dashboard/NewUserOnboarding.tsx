@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sparkles, Music2, ArrowRight, Check, Link2, LayoutGrid, Video } from "lucide-react";
+import { Sparkles, Package, ArrowRight, Check, Link2, LayoutGrid, Video } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -15,20 +15,20 @@ interface OnboardingStep {
 const steps: OnboardingStep[] = [
   {
     id: 1,
-    title: "Paste Your Lyrics",
-    description: "Drop in a Suno link and we'll auto-fill the title, artist, and lyrics — or type them in manually.",
+    title: "Add Your Product",
+    description: "Bring your product photos, audience, and main benefit.",
     icon: <Link2 className="h-6 w-6" />,
   },
   {
     id: 2,
     title: "Pick a Style",
-    description: "Choose from Kinetic, Neon, Cinematic, Waveform and more — each with its own mood and aesthetic.",
+    description: "Choose a creator direction and ad angle for your product.",
     icon: <LayoutGrid className="h-6 w-6" />,
   },
   {
     id: 3,
     title: "Generate Your Video",
-    description: "SongDoe creates a cinematic AI music video in minutes. Download in SD, HD, or 4K.",
+    description: "Review your generated creative in the Ad Library.",
     icon: <Video className="h-6 w-6" />,
   },
 ];
@@ -64,8 +64,8 @@ export const NewUserOnboarding = ({ onDismiss }: NewUserOnboardingProps) => {
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-xl">Welcome to SongDoe!</CardTitle>
-              <CardDescription>Create your first AI music video in 3 simple steps</CardDescription>
+              <CardTitle className="text-xl">Welcome to UGC Ads Studio!</CardTitle>
+              <CardDescription>Your product-focused creative workspace</CardDescription>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={handleSkip}>
@@ -118,12 +118,12 @@ export const NewUserOnboarding = ({ onDismiss }: NewUserOnboardingProps) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Music2 className="h-4 w-4" />
-              <span>Suno Link Parsing</span>
+              <Package className="h-4 w-4" />
+              <span>Product photos</span>
             </div>
             <div className="flex items-center gap-2">
               <Video className="h-4 w-4" />
-              <span>SD / HD / 4K Export</span>
+              <span>Ad creative export</span>
             </div>
           </div>
           <Button onClick={handleNext} className="gap-2">

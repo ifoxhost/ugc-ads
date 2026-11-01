@@ -203,12 +203,12 @@ const Dashboard = () => {
             onClick={() => navigate("/library")}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">AI Music Videos</CardTitle>
+              <CardTitle className="text-sm font-medium">Image Ads</CardTitle>
               <ImageIcon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalImageAds}</div>
-              <p className="text-xs text-muted-foreground">Lyric videos generated</p>
+              <p className="text-xs text-muted-foreground">Saved image creative</p>
             </CardContent>
           </Card>
 
@@ -217,12 +217,12 @@ const Dashboard = () => {
             onClick={() => navigate("/library")}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Videos This Month</CardTitle>
+              <CardTitle className="text-sm font-medium">Video Ads</CardTitle>
               <Video className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalVideoAds}</div>
-              <p className="text-xs text-muted-foreground">Rendered this billing period</p>
+              <p className="text-xs text-muted-foreground">Saved video creative</p>
             </CardContent>
           </Card>
 
@@ -241,7 +241,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Quick Action - Create AI Music Video */}
+        {/* Quick Action - Create UGC Ad */}
         <div className="mb-8">
           <Card 
             className="border-border hover:border-primary/50 transition-colors cursor-pointer group bg-gradient-to-br from-primary/5 to-primary/10" 
@@ -253,8 +253,8 @@ const Dashboard = () => {
                   <Sparkles className="h-7 w-7 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <CardTitle className="text-xl">Create AI Music Video</CardTitle>
-                  <CardDescription>Generate a stunning AI music video from your song</CardDescription>
+                  <CardTitle className="text-xl">Create UGC Ad</CardTitle>
+                  <CardDescription>Bring your product and a fresh creative angle</CardDescription>
                 </div>
                 <Button className="group-hover:bg-primary/90">
                   Get Started <ArrowRight className="ml-2 h-4 w-4" />
@@ -274,7 +274,7 @@ const Dashboard = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Recent AI Music Videos</CardTitle>
+                <CardTitle>Recent Creative</CardTitle>
                 <CardDescription>Your latest generated videos</CardDescription>
               </div>
               <Button variant="outline" onClick={() => navigate("/library")}>
@@ -292,7 +292,7 @@ const Dashboard = () => {
                   className="mt-4"
                   onClick={() => navigate("/create")}
                 >
-                  Create Your First Video
+                  Create Your First Ad
                 </Button>
               </div>
             ) : (
@@ -312,7 +312,7 @@ const Dashboard = () => {
                       />
                       <div>
                     <p className="font-medium capitalize">
-                          AI Music Video • {ad.style_template}
+                          Creative • {ad.style_template}
                         </p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="h-3 w-3" />

@@ -44,73 +44,11 @@ const Pricing = () => {
   };
 
   const plans = [
-    {
-      id: "starter",
-      name: "Starter",
-      price: "R199",
-      period: "/month",
-      features: [
-        "10 AI music videos / month",
-        "HD export (1080p)",
-        "Kling 3.0 + Veo 3.1 engines",
-        "GPT-4o script writing",
-        "Suno URL import",
-        "ElevenLabs transcription",
-        "9:16, 1:1, 16:9 formats",
-        "Email support",
-      ],
-      cta: "Start Free Trial",
-      variant: "outline" as const,
-    },
-    {
-      id: "pro",
-      name: "Pro",
-      price: "R499",
-      period: "/month",
-      badge: "Most Popular",
-      features: [
-        "50 AI music videos / month",
-        "4K export (Ultra HD)",
-        "Kling 3.0 + Veo 3.1 engines",
-        "GPT-4o + script customization",
-        "Suno URL import + audio upload",
-        "ElevenLabs Scribe v2 transcription",
-        "Priority rendering queue",
-        "All aspect ratios incl. 4:5",
-        "Email + Chat support",
-      ],
-      cta: "Start Free Trial",
-      variant: "default" as const,
-      highlight: true,
-    },
-    {
-      id: "studio",
-      name: "Studio",
-      price: "R1 299",
-      period: "/month",
-      features: [
-        "200 AI music videos / month",
-        "4K export + raw storyboard files",
-        "All AI engines incl. future models",
-        "Custom visual style presets",
-        "Multi-project workspace",
-        "Team collaboration (5 seats)",
-        "Commercial license for all outputs",
-        "Dedicated account manager",
-      ],
-      cta: "Start Free Trial",
-      variant: "outline" as const,
-    },
+    { id: "starter", name: "Starter", price: "R199", period: "/month", features: ["20 monthly generation credits", "Product-focused ad creative", "Editable scripts & hooks", "Saved ad library"], cta: "Choose Starter", variant: "outline" as const },
+    { id: "pro", name: "Pro", price: "R499", period: "/month", badge: "Most Popular", features: ["100 monthly generation credits", "Product-focused ad creative", "Editable scripts & hooks", "Saved ad library"], cta: "Choose Pro", variant: "default" as const, highlight: true },
+    { id: "studio", name: "Studio", price: "R1 299", period: "/month", features: ["400 monthly generation credits", "Product-focused ad creative", "Editable scripts & hooks", "Saved ad library"], cta: "Choose Studio", variant: "outline" as const },
   ];
-
-  const creditsTable = [
-    { action: "AI Music Video — SD (9:16, Kling 3.0)", credits: 5 },
-    { action: "AI Music Video — HD (9:16, Kling 3.0)", credits: 8 },
-    { action: "AI Music Video — 4K (16:9, Veo 3.1)", credits: 15 },
-    { action: "AI Music Video — 4K (9:16, Veo 3.1)", credits: 15 },
-    { action: "AI Music Video — 1:1 Square (any engine)", credits: 8 },
-    { action: "Storyboard only (Nano Banana Pro)", credits: 2 },
-  ];
+  const creditsTable = [{ action: "Current plan allowance and generation charges", credits: "Unchanged" }];
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,10 +56,10 @@ const Pricing = () => {
       <section className="pt-20 sm:pt-32 pb-12 sm:pb-20 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto text-center">
           <h1 className="text-[2rem] sm:text-[3rem] md:text-[4rem] font-tight font-semibold mb-3 sm:mb-4 tracking-tight">
-            Simple Pricing for AI Music Video Creation
+            Plans for your creative workflow
           </h1>
           <p className="text-muted-foreground text-base sm:text-lg mb-6 sm:mb-8">
-            Every plan includes Kling 3.0, Veo 3.1, GPT-4o script writing, ElevenLabs transcription, and Suno URL import
+            Your current prices, monthly credits, and subscription remain unchanged.
           </p>
 
           {/* Plans Grid */}
@@ -129,7 +67,7 @@ const Pricing = () => {
             {plans.map((plan) => (
               <div
                 key={plan.name}
-                className={`relative rounded-2xl p-6 border ${
+                className={`relative rounded-lg p-6 border ${
                   plan.highlight
                     ? "bg-gradient-to-b from-primary/5 to-transparent border-primary/20"
                     : "bg-card border-border"
@@ -162,7 +100,7 @@ const Pricing = () => {
 
                 <Button
                   variant={plan.variant}
-                  className={`w-full rounded-xl h-12 ${
+                  className={`w-full rounded-lg h-12 ${
                     plan.highlight
                       ? "bg-foreground text-background hover:bg-foreground/90"
                       : ""
@@ -191,12 +129,12 @@ const Pricing = () => {
           <h2 className="text-[1.75rem] sm:text-[2.5rem] font-tight font-semibold text-center mb-8 sm:mb-12 tracking-tight">
             Credit Usage
           </h2>
-          <div className="bg-card rounded-xl overflow-x-auto border border-border">
+          <div className="bg-card rounded-lg overflow-x-auto border border-border">
             <table className="w-full min-w-[400px]">
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-3 sm:py-4 px-3 sm:px-6 font-medium text-sm sm:text-base">Action</th>
-                  <th className="text-left py-3 sm:py-4 px-3 sm:px-6 font-medium text-sm sm:text-base">SongDoe Credits Used</th>
+                  <th className="text-left py-3 sm:py-4 px-3 sm:px-6 font-medium text-sm sm:text-base">Generation credits</th>
                 </tr>
               </thead>
               <tbody>

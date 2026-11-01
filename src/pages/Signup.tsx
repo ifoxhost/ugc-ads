@@ -100,7 +100,7 @@ const Signup = () => {
       await recordSuccessfulLogin(email);
 
       toast({
-        title: "Welcome to Lyric A Vid! 🎵",
+        title: "Welcome to UGC Ads Studio!",
         description: "Check your email to verify your account, then log in to start creating.",
       });
       navigate("/login");
@@ -145,7 +145,7 @@ const Signup = () => {
               </svg>
             </div>
           </Link>
-          <h1 className="text-[2rem] sm:text-[2.5rem] font-tight font-semibold mb-2">Join SongDoe</h1>
+          <h1 className="text-[2rem] sm:text-[2.5rem] font-tight font-semibold mb-2">Join UGC Ads Studio</h1>
         </div>
 
         {isLocked && lockMessage && (

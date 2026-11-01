@@ -136,7 +136,7 @@ const Login = () => {
               </svg>
             </div>
           </Link>
-          <h1 className="text-[2rem] sm:text-[2.5rem] font-tight font-semibold mb-2">Welcome to SongDoe</h1>
+          <h1 className="text-[2rem] sm:text-[2.5rem] font-tight font-semibold mb-2">Welcome to UGC Ads Studio</h1>
         </div>
 
         {isLocked && lockMessage && (
