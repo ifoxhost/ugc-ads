@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createStudioDraft, duplicateDraft, type StudioAd } from "./studio-types";
+import { createStudioDraft, duplicateDraft } from "./studio-types";
 import { applyScriptRegeneration, canGenerate, HOOK_VARIANT_COUNT, SCRIPT_VARIANT_COUNT } from "./studio-rules";
 describe("UGC studio rules", () => {
   test("new ads default to 9:16", () => expect(createStudioDraft().aspectRatio).toBe("9:16"));
@@ -13,7 +13,7 @@ describe("UGC studio rules", () => {
   });
   test("duplicate starts with a blank new hook without changing the saved ad", () => {
     const draft = createStudioDraft(); draft.scripts = [{angle:"A",hook:"Original",body:"Body",cta:"Shop",caption:"Caption"}];
-    const ad = { ad_copy:{draft} } as StudioAd;
+    const ad = { ad_copy:{draft} };
     expect(duplicateDraft(ad)?.scripts[0].hook).toBe(""); expect(ad.ad_copy?.draft?.scripts[0].hook).toBe("Original");
   });
   test("expired subscriptions cannot generate",()=>expect(canGenerate({status:"active",renew_date:"2026-01-01",credits:20,credits_used:0},false,new Date("2026-11-01").getTime())).toBe(false));

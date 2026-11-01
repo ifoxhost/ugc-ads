@@ -107,11 +107,7 @@ const Sidebar = () => {
                 )
               }
             >
-              {isOnCreatePage ? (
-                <Sparkles className="h-6 w-6 animate-bounce" />
-              ) : (
-                <Wand2 className="h-6 w-6" />
-              )}
+              <Wand2 className="h-6 w-6" />
             </NavLink>
           </TooltipTrigger>
           <TooltipContent 
@@ -175,7 +171,7 @@ const Sidebar = () => {
       {/* Logo */}
       <div className="mb-8">
         <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-          <BrandMark compact />
+          <span className="text-background"><BrandMark compact /></span>
         </div>
       </div>
 
