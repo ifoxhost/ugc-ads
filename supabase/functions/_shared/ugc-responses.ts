@@ -1,5 +1,5 @@
 import { createOpenAI } from "npm:@ai-sdk/openai@3";
-import { streamText, type ModelMessage } from "npm:ai@6";
+import { streamText, Output, jsonSchema, type ModelMessage } from "npm:ai@6";
 
 import {
   createLovableAiGatewayRunIdFetch,
@@ -27,6 +27,8 @@ export function createResponsesCall(
     ...(instructions ? { system: instructions } : {}),
     messages,
     abortSignal: request.signal,
+    output: Output.object({ schema: jsonSchema({ type: "object", additionalProperties: false, properties: { scripts: { type: "array", items: { type: "object", additionalProperties: false, properties: Object.fromEntries(["angle","hook","body","cta","caption"].map(k => [k,{type:"string"}])), required:["angle","hook","body","cta","caption"] } }, hooks: { type:"array", items:{type:"string"} } }, required:["scripts","hooks"] }) }),
+    maxRetries: 0,
     providerOptions: {
       openai: {
         store: false,
