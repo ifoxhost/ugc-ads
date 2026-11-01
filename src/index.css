@@ -72,11 +72,11 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: 0;
   }
   
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Inter Tight', 'Inter', sans-serif;
+    font-family: 'Outfit', sans-serif; letter-spacing: 0;
     font-weight: 600;
   }
   
@@ -143,3 +143,8 @@ All colors MUST be HSL.
     to   { transform: scaleY(1);   opacity: 1;   }
   }
 }
+
+.ugc-home-hero { min-height: min(740px, 85svh); padding-top: 72px; }
+.ugc-hero-shade { background: linear-gradient(90deg, hsl(var(--background) / .82), hsl(var(--background) / .08) 72%); }
+@media (max-width: 640px) { .ugc-home-hero { min-height: 680px; } .ugc-hero-shade { background: hsl(var(--background) / .66); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
