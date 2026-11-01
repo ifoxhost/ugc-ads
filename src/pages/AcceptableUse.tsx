@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import Footer from "@/components/Footer";
 
-const LAST_UPDATED = "March 1, 2025";
+const LAST_UPDATED = "November 1, 2026";
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="mb-10">
@@ -14,23 +14,23 @@ const AcceptableUse = () => (
   <div className="min-h-screen bg-background text-foreground">
     <div className="max-w-3xl mx-auto px-6 py-20">
       <div className="mb-12">
-        <Link to="/" className="text-primary text-sm hover:underline">← Back to SongDoe</Link>
+        <Link to="/" className="text-primary text-sm hover:underline">← Back to UGC Ads Studio</Link>
         <h1 className="text-4xl font-semibold mt-6 mb-2">Acceptable Use Policy</h1>
         <p className="text-muted-foreground text-sm">Last updated: {LAST_UPDATED}</p>
       </div>
 
       <Section title="1. Purpose">
         <p>
-          This Acceptable Use Policy ("AUP") governs how you may use the SongDoe platform and
+          This Acceptable Use Policy ("AUP") governs how you may use the UGC Ads Studio platform and
           services. It exists to protect our users, maintain the integrity of the Service, and ensure
           a positive creative environment for everyone.
         </p>
       </Section>
 
       <Section title="2. Permitted Use">
-        <p>You may use SongDoe to:</p>
+        <p>You may use UGC Ads Studio to:</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li>Create AI music videos from song lyrics you own or have rights to</li>
+          <li>Create product-focused creative using assets you own or have rights to</li>
           <li>Generate UGC-style ads for legitimate products and services</li>
           <li>Store, manage, and share your creative output</li>
           <li>Explore features within the limits of your subscription plan</li>
@@ -38,7 +38,7 @@ const AcceptableUse = () => (
       </Section>
 
       <Section title="3. Prohibited Content">
-        <p>You must not use SongDoe to create, upload, or distribute content that:</p>
+        <p>You must not use UGC Ads Studio to create, upload, or distribute content that:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Infringes any copyright, trademark, or other intellectual property right</li>
           <li>Is defamatory, harassing, threatening, or incites violence or hatred</li>
@@ -64,7 +64,7 @@ const AcceptableUse = () => (
 
       <Section title="5. AI-Generated Content">
         <p>
-          You are responsible for the prompts, lyrics, and inputs you provide to SongDoe's AI systems.
+          You are responsible for the prompts, scripts, and inputs you provide to UGC Ads Studio's AI systems.
           AI-generated output remains your responsibility. Do not use AI features to generate content that
           would otherwise violate this policy.
         </p>
@@ -85,7 +85,7 @@ const AcceptableUse = () => (
 
       <Section title="7. Changes to This Policy">
         <p>
-          We may update this AUP as the Service evolves. Continued use of SongDoe after changes
+          We may update this AUP as the Service evolves. Continued use of UGC Ads Studio after changes
           constitutes acceptance of the revised policy. Material changes will be communicated via email
           or in-app notice.
         </p>

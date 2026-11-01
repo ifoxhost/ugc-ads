@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import Footer from "@/components/Footer";
 
-const LAST_UPDATED = "March 1, 2025";
+const LAST_UPDATED = "November 1, 2026";
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="mb-10">
@@ -14,29 +14,29 @@ const Terms = () => (
   <div className="min-h-screen bg-background text-foreground">
     <div className="max-w-3xl mx-auto px-6 py-20">
       <div className="mb-12">
-        <Link to="/" className="text-primary text-sm hover:underline">← Back to SongDoe</Link>
+        <Link to="/" className="text-primary text-sm hover:underline">← Back to UGC Ads Studio</Link>
         <h1 className="text-4xl font-semibold mt-6 mb-2">Terms of Service</h1>
         <p className="text-muted-foreground text-sm">Last updated: {LAST_UPDATED}</p>
       </div>
 
       <Section title="1. Acceptance of Terms">
         <p>
-          By accessing or using SongDoe ("Service", "we", "us", or "our"), you agree to be bound by
+          By accessing or using UGC Ads Studio ("Service", "we", "us", or "our"), you agree to be bound by
           these Terms of Service. If you do not agree to these terms, please do not use the Service.
         </p>
       </Section>
 
       <Section title="2. Description of Service">
         <p>
-          SongDoe provides an AI-powered platform that creates AI music videos from any song. The Service
-          includes access to templates, Suno integration, a video rendering pipeline, and a personal library to
-          manage your creations.
+          UGC Ads Studio provides an AI-powered platform for product-focused UGC ad creative. The Service
+          includes product briefs, editable scripts, creator direction, and a personal library to
+          manage your creations. Generation availability depends on connected services.
         </p>
       </Section>
 
       <Section title="3. Eligibility">
         <p>
-          You must be at least 13 years old to use SongDoe. By using the Service, you represent that you
+          You must be at least 13 years old to use UGC Ads Studio. By using the Service, you represent that you
           meet this age requirement and have the legal capacity to enter into these Terms.
         </p>
       </Section>
@@ -51,13 +51,13 @@ const Terms = () => (
 
       <Section title="5. Content & Intellectual Property">
         <p>
-          You retain ownership of any lyrics, music, or creative content you upload. By submitting content
-          you grant SongDoe a limited, non-exclusive licence to process and render that content solely to
+          You retain ownership of any product photos, scripts, or creative content you upload. By submitting content
+          you grant UGC Ads Studio a limited, non-exclusive licence to process and render that content solely to
           provide the Service to you.
         </p>
         <p>
           You must not upload content that infringes third-party copyright or violates any applicable law.
-          SongDoe reserves the right to remove content that violates these Terms.
+          UGC Ads Studio reserves the right to remove content that violates these Terms.
         </p>
       </Section>
 
@@ -88,7 +88,7 @@ const Terms = () => (
 
       <Section title="9. Limitation of Liability">
         <p>
-          To the fullest extent permitted by law, SongDoe shall not be liable for any indirect, incidental,
+          To the fullest extent permitted by law, UGC Ads Studio shall not be liable for any indirect, incidental,
           or consequential damages arising from your use of the Service.
         </p>
       </Section>
