@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import Footer from "@/components/Footer";
 
-const LAST_UPDATED = "March 1, 2025";
+const LAST_UPDATED = "November 1, 2026";
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="mb-10">
@@ -14,7 +14,7 @@ const CookiePolicy = () => (
   <div className="min-h-screen bg-background text-foreground">
     <div className="max-w-3xl mx-auto px-6 py-20">
       <div className="mb-12">
-        <Link to="/" className="text-primary text-sm hover:underline">← Back to SongDoe</Link>
+        <Link to="/" className="text-primary text-sm hover:underline">← Back to UGC Ads Studio</Link>
         <h1 className="text-4xl font-semibold mt-6 mb-2">Cookie Policy</h1>
         <p className="text-muted-foreground text-sm">Last updated: {LAST_UPDATED}</p>
       </div>
@@ -27,7 +27,7 @@ const CookiePolicy = () => (
       </Section>
 
       <Section title="2. How We Use Cookies">
-        <p>SongDoe uses cookies for the following purposes:</p>
+        <p>UGC Ads Studio uses cookies for the following purposes:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong className="text-foreground">Authentication</strong> — to keep you logged in and secure your session</li>
           <li><strong className="text-foreground">Preferences</strong> — to remember your settings and UI preferences</li>
@@ -54,7 +54,7 @@ const CookiePolicy = () => (
         <p>
           You can control and delete cookies through your browser settings. Most browsers allow you to
           block cookies or alert you when a cookie is being set. Note that disabling essential cookies
-          will prevent you from using core features of SongDoe.
+          will prevent you from using core features of UGC Ads Studio.
         </p>
         <p>
           For guidance on managing cookies in your browser, visit{" "}

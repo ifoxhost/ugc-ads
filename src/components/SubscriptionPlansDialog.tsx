@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Check, Loader2, Music2 } from "lucide-react";
+import { Check, Loader2, Video } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,50 +18,9 @@ interface SubscriptionPlansDialogProps {
 }
 
 const plans = [
-  {
-    id: "starter",
-    name: "Starter",
-    price: "R199",
-    period: "/month",
-    features: [
-      "20 AI music videos / month",
-      "SD export",
-      "All 6 templates",
-      "Suno link parsing",
-    ],
-    variant: "outline" as const,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "R499",
-    period: "/month",
-    badge: "Most Popular",
-    offerBadge: "🔥 Best Value",
-    features: [
-      "100 AI music videos / month",
-      "HD export",
-      "All 6 premium templates",
-      "Suno link parsing",
-      "Priority rendering",
-    ],
-    variant: "default" as const,
-    highlight: true,
-  },
-  {
-    id: "studio",
-    name: "Studio",
-    price: "R1 299",
-    period: "/month",
-    features: [
-      "400 AI music videos / month",
-      "4K export",
-      "Custom font uploads",
-      "Multi-project workspace",
-      "Team collaboration",
-    ],
-    variant: "outline" as const,
-  },
+ { id:"starter",name:"Starter",price:"R199",period:"/month",features:["20 monthly generation credits","Product-focused creative","Editable scripts & hooks"],highlight:false,badge:null,offerBadge:null },
+ { id:"pro",name:"Pro",price:"R499",period:"/month",features:["100 monthly generation credits","Product-focused creative","Editable scripts & hooks"],highlight:true,badge:"Most Popular",offerBadge:null },
+ { id:"studio",name:"Studio",price:"R1 299",period:"/month",features:["400 monthly generation credits","Product-focused creative","Editable scripts & hooks"],highlight:false,badge:null,offerBadge:null },
 ];
 
 const SubscriptionPlansDialog = ({ open, onOpenChange }: SubscriptionPlansDialogProps) => {
@@ -106,13 +65,13 @@ const SubscriptionPlansDialog = ({ open, onOpenChange }: SubscriptionPlansDialog
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="text-center pb-4">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Music2 className="h-6 w-6 text-primary" />
+            <Video className="h-6 w-6 text-primary" />
           </div>
           <DialogTitle className="text-2xl font-semibold">
-            Subscribe to Generate Videos
+            Choose your creative plan
           </DialogTitle>
           <DialogDescription>
-            Choose a plan to unlock AI music video generation and start creating stunning music content
+            Choose a plan for UGC ad creation. Current billing and credit allowances are unchanged.
           </DialogDescription>
         </DialogHeader>
 
@@ -120,7 +79,7 @@ const SubscriptionPlansDialog = ({ open, onOpenChange }: SubscriptionPlansDialog
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`relative rounded-2xl p-5 border transition-all ${
+              className={`relative rounded-lg p-5 border transition-all ${
                 plan.highlight
                   ? "bg-gradient-to-b from-primary/10 to-transparent border-primary/30 shadow-lg shadow-primary/10"
                   : "bg-card border-border hover:border-primary/20"

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import Footer from "@/components/Footer";
 
-const LAST_UPDATED = "March 1, 2025";
+const LAST_UPDATED = "November 1, 2026";
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="mb-10">
@@ -14,14 +14,14 @@ const Privacy = () => (
   <div className="min-h-screen bg-background text-foreground">
     <div className="max-w-3xl mx-auto px-6 py-20">
       <div className="mb-12">
-        <Link to="/" className="text-primary text-sm hover:underline">← Back to SongDoe</Link>
+        <Link to="/" className="text-primary text-sm hover:underline">← Back to UGC Ads Studio</Link>
         <h1 className="text-4xl font-semibold mt-6 mb-2">Privacy Policy</h1>
         <p className="text-muted-foreground text-sm">Last updated: {LAST_UPDATED}</p>
       </div>
 
       <Section title="1. Introduction">
         <p>
-          SongDoe ("we", "our", "us") is committed to protecting your personal information. This Privacy
+          UGC Ads Studio ("we", "our", "us") is committed to protecting your personal information. This Privacy
           Policy explains what data we collect, how we use it, and your rights regarding that data.
         </p>
       </Section>
@@ -31,7 +31,7 @@ const Privacy = () => (
         <ul className="list-disc pl-5 space-y-1">
           <li><strong className="text-foreground">Account data</strong> — email address, name, and authentication credentials</li>
           <li><strong className="text-foreground">Usage data</strong> — videos created, credits used, session activity, and feature interactions</li>
-          <li><strong className="text-foreground">Content data</strong> — lyrics, song titles, and uploaded images you provide to generate videos</li>
+          <li><strong className="text-foreground">Content data</strong> — product details, ad scripts, and uploaded images you provide to generate videos</li>
           <li><strong className="text-foreground">Payment data</strong> — handled by our payment processors (Stripe/PayFast); we do not store card details</li>
           <li><strong className="text-foreground">Technical data</strong> — IP address, browser type, device info, and cookies</li>
         </ul>
@@ -69,7 +69,7 @@ const Privacy = () => (
         <p>
           We retain your account data for as long as your account is active. Content in your library (videos,
           images) is retained until you delete it. Deleted items move to Trash and are permanently removed
-          after 30 days.
+          after 14 days.
         </p>
       </Section>
 

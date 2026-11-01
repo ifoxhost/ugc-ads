@@ -15,7 +15,7 @@ const OPENINGS = [
     team: "AI",
     location: "Remote",
     type: "Full-time",
-    desc: "Improve beat-sync, lyric segmentation, and style-transfer models that power our video generation engine.",
+    desc: "Improve product consistency, creative generation, and visual models that power our video generation engine.",
   },
   {
     title: "Product Designer",
@@ -29,12 +29,12 @@ const OPENINGS = [
     team: "Marketing",
     location: "Remote",
     type: "Full-time",
-    desc: "Drive artist acquisition across TikTok, YouTube, and music communities. SEO & paid-social experience a plus.",
+    desc: "Drive brand acquisition across TikTok, YouTube, and ecommerce communities. SEO & paid-social experience a plus.",
   },
 ];
 
 const VALUES = [
-  { title: "Makers first", desc: "We build for artists and creators. Every decision starts with 'does this help someone make better music content?'" },
+  { title: "Makers first", desc: "We build for brands and creators. Every decision starts with 'does this help someone make better product creative?'" },
   { title: "Ship fast, learn faster", desc: "We iterate quickly, ship early, and fix what doesn't work. Progress over perfection." },
   { title: "Remote by default", desc: "Our team is distributed across the globe. Async communication, flexible hours, outcome-focused." },
   { title: "Transparent & direct", desc: "We say what we mean. No politics, no layers. Everyone has a voice and a seat at the table." },
@@ -47,14 +47,14 @@ const Careers = () => {
       <section className="py-24 px-6 text-center max-w-4xl mx-auto">
         <span className="text-xs uppercase tracking-widest text-primary font-semibold">Careers</span>
         <h1 className="text-[2.5rem] sm:text-[4rem] font-semibold tracking-tight mt-3 mb-5 leading-tight">
-          Help artists make
+          Help brands make
           <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400">
             better videos
           </span>
         </h1>
         <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-          We're building the fastest way to turn music into stunning AI music videos. Join us.
+          We're building a product-focused creative workspace for brands and agencies.
         </p>
       </section>
 

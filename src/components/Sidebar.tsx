@@ -1,3 +1,4 @@
+import BrandMark from "@/components/ugc/BrandMark";
 import { useState, useEffect } from "react";
 import { Library, HelpCircle, User, Home, Wand2, LogIn, Shield, LayoutDashboard, Trash2, Sparkles } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
@@ -20,14 +21,6 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useUser } from "@/hooks/useUser";
 import { useCreateSubmit } from "@/hooks/useCreateSubmit";
-
-const LyricAVidLogo = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-primary-foreground">
-    <path d="M9 18V5l12-2v13" />
-    <circle cx="6" cy="18" r="3" />
-    <circle cx="18" cy="16" r="3" />
-  </svg>
-);
 
 const Sidebar = () => {
   const isMobile = useIsMobile();
@@ -52,7 +45,7 @@ const Sidebar = () => {
   const handleCreateClick = (e: React.MouseEvent) => {
     if (isOnCreatePage) {
       e.preventDefault();
-      triggerSubmit();
+      document.querySelector("h1")?.scrollIntoView({ behavior: "smooth" });
     }
   };
 
@@ -114,18 +107,14 @@ const Sidebar = () => {
                 )
               }
             >
-              {isOnCreatePage ? (
-                <Sparkles className="h-6 w-6 animate-bounce" />
-              ) : (
-                <Wand2 className="h-6 w-6" />
-              )}
+              <Wand2 className="h-6 w-6" />
             </NavLink>
           </TooltipTrigger>
           <TooltipContent 
             side="top" 
             className="bg-primary text-primary-foreground border-primary px-3 py-2"
           >
-            <p className="text-sm font-medium">Tap to generate your video!</p>
+            <p className="text-sm font-medium">Open your creative workspace</p>
           </TooltipContent>
         </Tooltip>
 
@@ -182,7 +171,7 @@ const Sidebar = () => {
       {/* Logo */}
       <div className="mb-8">
         <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-          <LyricAVidLogo />
+          <span className="text-background"><BrandMark compact /></span>
         </div>
       </div>
 

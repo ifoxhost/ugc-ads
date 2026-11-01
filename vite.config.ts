@@ -5,6 +5,7 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: { "import.meta.env.VITE_LOCAL_MOCK": JSON.stringify("false") },
   server: {
     host: "::",
     port: 8080,
