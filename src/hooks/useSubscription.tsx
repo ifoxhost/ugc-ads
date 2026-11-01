@@ -10,20 +10,19 @@ export const useSubscription = () => {
   const { user: authUser, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    let current = true;
     const checkSubscription = async () => {
       try {
         // Admins don't need subscriptions
         if (isAdmin) {
-          setHasActiveSubscription(true);
-          setLoading(false);
+          if (current) { setHasActiveSubscription(true); setLoading(false); }
           return;
         }
 
         const { data: { user } } = await supabase.auth.getUser();
         
         if (!user) {
-          setHasActiveSubscription(false);
-          setLoading(false);
+          if (current) { setHasActiveSubscription(false); setLoading(false); }
           return;
         }
 
@@ -36,24 +35,25 @@ export const useSubscription = () => {
           .single();
 
         if (error || !data) {
-          setHasActiveSubscription(false);
+          if (current) setHasActiveSubscription(false);
         } else {
           // Check if subscription is still valid (not expired)
           const renewDate = new Date(data.renew_date);
           const now = new Date();
-          setHasActiveSubscription(renewDate > now);
+          if (current) setHasActiveSubscription(renewDate > now);
         }
       } catch (error) {
         console.error('Error checking subscription:', error);
-        setHasActiveSubscription(false);
+        if (current) setHasActiveSubscription(false);
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
 
     if (!roleLoading && !authLoading) {
       checkSubscription();
     }
+    return () => { current = false; };
   }, [isAdmin, roleLoading, authLoading, authUser?.id]);
 
   return { hasActiveSubscription, loading: loading || roleLoading || authLoading };
