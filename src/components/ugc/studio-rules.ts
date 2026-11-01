@@ -2,6 +2,7 @@ import type { AdScript } from "./studio-types";
 export const SCRIPT_VARIANT_COUNT = 3;
 export const HOOK_VARIANT_COUNT = 5;
 export function applyScriptRegeneration(existing: AdScript[], incoming: AdScript[], selected: number): AdScript[] {
+  if (incoming.length !== SCRIPT_VARIANT_COUNT) throw new Error("Expected three script variants");
   if (existing.length !== SCRIPT_VARIANT_COUNT) return incoming;
   return existing.map((script, index) => index === selected ? incoming[selected] : script);
 }

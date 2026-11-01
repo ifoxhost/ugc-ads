@@ -16,4 +16,4 @@ The old UGC automation URL returned an instance-level 404 during a non-mutating 
 Product-page automatic import, burned-in captions, SRT alignment, 1080p guarantees, and 60-second output are not offered as verified capabilities. Product page URLs are stored for reference and clearly require manual details and photos.
 
 ## Verification
-Run `bun test src/components/ugc/studio-rules.test.ts`. The signed-in real flow has been checked: photo upload → three AI scripts/five hooks → image generation → Library readback → saved campaign notes → new-hook duplication. No mock provider responses are used. Legacy music frontend files are archived under `docs/archive`; historical records and pending-job edge functions remain intact.
+Run `bun test src/components/ugc/studio-rules.test.js`. The signed-in real flow has been checked: photo upload → three AI scripts/five hooks → image generation → Library readback → saved campaign notes → new-hook duplication, plus Trash undo and the unavailable-video error. No mock provider responses are used. Legacy music frontend files are archived under `docs/archive`; historical records and pending-job edge functions remain intact.

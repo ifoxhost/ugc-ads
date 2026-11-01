@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
 import { useAuth } from "@/contexts/AuthContext";
+import { canGenerate } from "@/components/ugc/studio-rules";
 
 export const useSubscription = () => {
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean>(false);
@@ -29,7 +30,7 @@ export const useSubscription = () => {
         // Check for active subscription
         const { data, error } = await supabase
           .from('subscriptions')
-          .select('status, renew_date')
+          .select('status, renew_date, credits, credits_used')
           .eq('user_id', user.id)
           .eq('status', 'active')
           .single();
@@ -38,9 +39,7 @@ export const useSubscription = () => {
           if (current) setHasActiveSubscription(false);
         } else {
           // Check if subscription is still valid (not expired)
-          const renewDate = new Date(data.renew_date);
-          const now = new Date();
-          if (current) setHasActiveSubscription(renewDate > now);
+          if (current) setHasActiveSubscription(canGenerate(data, false));
         }
       } catch (error) {
         console.error('Error checking subscription:', error);
