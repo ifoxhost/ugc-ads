@@ -1,0 +1,6 @@
+import { useState } from "react";
+import { Copy, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+export default function CopyField({ label, value }: { label: string; value: string }) { const [copied,setCopied] = useState(false); const [failed,setFailed] = useState(false); return <div className="space-y-2"><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{label}</span><Button size="icon" variant="ghost" aria-label={`Copy ${label}`} title={`Copy ${label}`} onClick={async () => { try { await navigator.clipboard.writeText(value); setCopied(true); setFailed(false); toast.success(`${label} copied`); setTimeout(() => setCopied(false), 2000); } catch { setFailed(true); toast.error("Copy failed—select and copy"); } }}>{copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}</Button></div>{failed ? <><p className="text-xs text-destructive">Copy failed—select and copy</p><Textarea readOnly value={value} onFocus={e => e.currentTarget.select()} /></> : <p className="whitespace-pre-wrap break-words text-sm">{value}</p>}</div>; }

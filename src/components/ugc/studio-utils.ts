@@ -1,0 +1,6 @@
+export async function downloadAsset(url: string, name: string) {
+  try { const response = await fetch(url); if (!response.ok) throw new Error("Download unavailable"); const blob = await response.blob(); downloadBlob(blob, name); }
+  catch { window.open(url, "_blank", "noopener,noreferrer"); }
+}
+export function downloadBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+export async function functionError(error: unknown, data?: { error?: string }) { if (data?.error) return data.error; if (error && typeof error === "object" && "context" in error && error.context instanceof Response) { try { const body = await error.context.clone().json(); return body.error || body.message || "Request could not be completed."; } catch { /* use the regular message */ } } return error instanceof Error ? error.message : "Request could not be completed."; }
