@@ -1,4 +1,6 @@
 # UGC Ads Studio
+- [x] Add private reusable characters with 1–3 reference photos, selection, and generation conditioning.
+- [x] Verify character limits, signed-in save/reuse/edit/delete, and generation reference delivery with a completed image ad.
 - [x] Replace public branding, homepage, FAQ, pricing wording, and metadata.
 - [x] Implement product/script/creator/preview studio and authenticated scripts/image generation.
 - [x] Align Library and Dashboard with UGC metadata, notes, duplication, and batch export/trash.

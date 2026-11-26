@@ -8,6 +8,20 @@
       "when": 1795722557662,
       "tag": "0000_tighten_rls_and_storage_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795726301142,
+      "tag": "0001_reusable_ugc_characters",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795726328208,
+      "tag": "0002_private_character_reference_access",
+      "breakpoints": true
     }
   ]
 }

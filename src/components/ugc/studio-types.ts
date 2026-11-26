@@ -6,6 +6,8 @@ export interface StudioDraft {
   productImages: string[]; scripts: AdScript[]; hooks: string[]; selectedScript: number;
   demographics: DemographicOptions; setting: string; tone: string; framework: string;
   aspectRatio: string; mediaType: "image" | "video"; imageStyle: string; customDirection: string;
+  characterId?: string | null;
+  characterSnapshot?: { id: string; name: string; imagePaths: string[] };
 }
 export const createStudioDraft = (): StudioDraft => ({ productName: "", productUrl: "", audience: "", benefit: "", offer: "", cta: "Shop now", productImages: [], scripts: [], hooks: [], selectedScript: 0, demographics: { gender: "any", bodyBuild: "any", ageRange: "any", ethnicity: ["any"] }, setting: "Living room", tone: "Authentic", framework: "Creator story", aspectRatio: "9:16", mediaType: "video", imageStyle: "lifestyle", customDirection: "" });
 export interface StudioMetadata { productName?: string; framework?: string; headline?: string; cta?: string; caption?: string; title?: string; draft?: StudioDraft; campaignName?: string; performanceNotes?: string; error?: string; pipelineStage?: string; [key: string]: unknown }
