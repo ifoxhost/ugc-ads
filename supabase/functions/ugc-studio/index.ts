@@ -60,6 +60,7 @@ Deno.serve(async req=>{
   const path=`${user.id}/ugc-${adId}.${mime==="image/png"?"png":mime==="image/webp"?"webp":"jpg"}`;
   const {error:uploadError}=await sb.storage.from("ugc-generated").upload(path,bytes,{contentType:mime,upsert:false}); if(uploadError) throw new Error("Could not save the generated image.");
   const {data:url}=sb.storage.from("ugc-generated").getPublicUrl(path);
+  if(action!=="video"&&!admin){const {data:charged,error:credErr}=await sb.rpc("consume_credit",{_user_id:user.id,_amount:1}); if(credErr||charged!==true){await sb.storage.from("ugc-generated").remove([path]); await sb.from("generated_ads").update({status:"failed",ad_copy:{draft,productName:draft.productName,error:"No credits left.",pipelineStage:"failed"}}).eq("id",adId); return json({error:"An active plan with available credits is required.",code:"NO_SUBSCRIPTION",adId},402);}}
   if(action==="video"){
    const baseCopy={draft,productName:draft.productName,framework:draft.framework,headline:script.hook,cta:script.cta,caption:script.caption};
    await sb.from("generated_ads").update({generated_image_url:url.publicUrl,ad_copy:{...baseCopy,pipelineStage:"recording voiceover"}}).eq("id",adId);
