@@ -5,14 +5,15 @@ import { Output } from "npm:ai@6";
 import { createResponsesCall } from "../_shared/ugc-responses.ts";
 import { generateFluxImage, synthesizeVoice, submitTalkingVideo, checkTalkingVideo, falKey } from "../_shared/fal-ugc.ts";
 import { validateCharacterPaths, characterDirection } from "../_shared/ugc-characters.ts";
+import { buildMotionEdit, checkMotionRender, MOTION_CREDIT_COST, motionCaptions, motionShotDirections, submitMotionRender, validateMotionScript } from "../_shared/motion-ad.ts";
 const Script = z.object({ angle: z.string(), hook: z.string(), body: z.string(), cta: z.string(), caption: z.string() });
-const Draft = z.object({ productName:z.string().trim().min(1).max(200), productUrl:z.string().max(1000).default(""), audience:z.string().max(1000), benefit:z.string().min(1).max(2000), offer:z.string().max(500), cta:z.string().max(300), productImages:z.array(z.string().url().refine(v=>v.startsWith("https://"))).min(1).max(6), scripts:z.array(Script).max(3), hooks:z.array(z.string()).max(5), selectedScript:z.number().int().min(0).max(2), demographics:z.object({gender:z.string(),bodyBuild:z.string(),ageRange:z.string(),ethnicity:z.array(z.string()).max(8)}), setting:z.string().max(200), tone:z.string().max(100), framework:z.string().max(100), aspectRatio:z.enum(["9:16","1:1","16:9","4:5"]), mediaType:z.enum(["image","video"]), imageStyle:z.string().max(100), imageEngine:z.enum(["gemini","flux"]).default("gemini"), customDirection:z.string().max(2000), characterId:z.string().uuid().nullable().optional() });
+const Draft = z.object({ productName:z.string().trim().min(1).max(200), productUrl:z.string().max(1000).default(""), audience:z.string().max(1000), benefit:z.string().min(1).max(2000), offer:z.string().max(500), cta:z.string().max(300), productImages:z.array(z.string().url().refine(v=>v.startsWith("https://"))).min(1).max(6), scripts:z.array(Script).max(3), hooks:z.array(z.string()).max(5), selectedScript:z.number().int().min(0).max(2), demographics:z.object({gender:z.string(),bodyBuild:z.string(),ageRange:z.string(),ethnicity:z.array(z.string()).max(8)}), setting:z.string().max(200), tone:z.string().max(100), framework:z.string().max(100), aspectRatio:z.enum(["9:16","1:1","16:9","4:5"]), mediaType:z.enum(["image","video","motion"]), imageStyle:z.string().max(100), imageEngine:z.enum(["gemini","flux"]).default("gemini"), customDirection:z.string().max(2000), motionDuration:z.union([z.literal(15),z.literal(30)]).default(30), motionVoiceover:z.boolean().default(true), characterId:z.string().uuid().nullable().optional() });
 const CharacterInput = z.discriminatedUnion("action", [
  z.object({action:z.literal("characters-list")}),
  z.object({action:z.literal("character-save"),id:z.string().uuid().optional(),name:z.string().trim().min(1).max(100),imagePaths:z.array(z.string().min(1).max(300)).min(1).max(3)}),
  z.object({action:z.literal("character-delete"),id:z.string().uuid()})
 ]);
-const Input=z.object({ action:z.enum(["scripts","image","video"]), draft:Draft });
+const Input=z.object({ action:z.enum(["scripts","image","video","motion"]), draft:Draft });
 function json(body:unknown,status=200){return new Response(JSON.stringify(body),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});}
 Deno.serve(async req=>{
  if(req.method==="OPTIONS") return new Response("ok",{headers:corsHeaders});
@@ -65,16 +66,21 @@ Deno.serve(async req=>{
    const {data:row}=await sb.from("generated_ads").select("id,user_id,status,ad_copy,generated_video_url").eq("id",id.data).maybeSingle();
    if(!row||row.user_id!==user.id) return json({error:"Ad not found."},404);
    const copy=(row.ad_copy||{}) as Record<string,any>;
-   if(row.status!=="processing"||!copy.fal?.statusUrl) return json({adId:row.id,status:row.status,videoUrl:row.generated_video_url});
-   const r=await checkTalkingVideo(copy.fal.statusUrl,copy.fal.responseUrl);
+   const isMotion=Boolean(copy.motion?.renderId);
+   if(row.status!=="processing"||(!isMotion&&!copy.fal?.statusUrl)) return json({adId:row.id,status:row.status,videoUrl:row.generated_video_url});
+   let r;
+   if(isMotion){
+    const motionKey=Deno.env.get("SHOTSTACK_API_KEY"); if(!motionKey) return json({error:"Motion rendering is not configured yet."},503);
+    r=await checkMotionRender(motionKey,copy.motion.renderId,Number(copy.motion.durationSec||30));
+   }else r=await checkTalkingVideo(copy.fal.statusUrl,copy.fal.responseUrl);
    if(r.state==="running") return json({adId:row.id,status:"processing",stage:r.status});
    if(r.state==="failed"){await sb.from("generated_ads").update({status:"failed",ad_copy:{...copy,error:r.error,pipelineStage:"failed"}}).eq("id",row.id); return json({adId:row.id,status:"failed",error:r.error});}
    const vid=await fetch(r.videoUrl); if(!vid.ok) throw new Error("Could not download the rendered video.");
-   const bytes=new Uint8Array(await vid.arrayBuffer()); const path=`${user.id}/ugc-${row.id}.mp4`;
+   const bytes=new Uint8Array(await vid.arrayBuffer()); if(bytes.length<1024) throw new Error("The rendered video was empty or incomplete."); const path=`${user.id}/ugc-${row.id}.mp4`;
    const {error:upErr}=await sb.storage.from("ugc-generated").upload(path,bytes,{contentType:"video/mp4",upsert:true}); if(upErr) throw new Error("Could not save the rendered video.");
    const {data:pub}=sb.storage.from("ugc-generated").getPublicUrl(path);
-   await sb.from("generated_ads").update({status:"completed",generated_video_url:pub.publicUrl,video_duration:r.duration?Math.round(r.duration):null,completed_at:new Date().toISOString(),ad_copy:{...copy,pipelineStage:"done"}}).eq("id",row.id);
-   await sb.from("notifications").insert({user_id:user.id,type:"ad_completed",title:"Your UGC video ad is ready",body:copy.productName||"Video ad",url:`/library?ad=${row.id}`});
+   await sb.from("generated_ads").update({status:"completed",generated_video_url:pub.publicUrl,video_duration:r.duration?Math.round(r.duration):null,completed_at:new Date().toISOString(),ad_copy:{...copy,pipelineStage:"done",completedVideoUrl:pub.publicUrl}}).eq("id",row.id);
+   await sb.from("notifications").insert({user_id:user.id,type:"ad_completed",title:isMotion?"Your Product Motion ad is ready":"Your UGC video ad is ready",body:copy.productName||"Video ad",url:`/library?ad=${row.id}`});
    return json({adId:row.id,status:"completed",videoUrl:pub.publicUrl});
   }
   const parsed=Input.safeParse(body); if(!parsed.success) return json({error:"Check your product details and images.",details:parsed.error.flatten()},400);
@@ -83,9 +89,11 @@ Deno.serve(async req=>{
   const {data:admin}=await sb.rpc("has_role",{_user_id:user.id,_role:"admin"});
   const {data:subscription}=await sb.from("subscriptions").select("credits,credits_used,renew_date,status").eq("user_id",user.id).eq("status","active").maybeSingle();
   if(!admin && (!subscription || new Date(subscription.renew_date)<=new Date() || subscription.credits<=subscription.credits_used)) return json({error:"An active plan with available credits is required.",code:"NO_SUBSCRIPTION"},402);
-  if(action==="video"&&!falKey()) return json({error:"Video generation is not configured yet. Your draft is preserved; no credit was charged.",code:"UGC_VIDEO_UNAVAILABLE"},503);
-  const key=Deno.env.get("LOVABLE_API_KEY"); if(!key) return json({error:"AI generation is not configured."},503);
+  if((action==="video"||action==="motion")&&!falKey()) return json({error:action==="motion"?"Product Motion needs FLUX and is not configured yet. Your draft is preserved; no credit was charged.":"Video generation is not configured yet. Your draft is preserved; no credit was charged.",code:"UGC_VIDEO_UNAVAILABLE"},503);
+  const motionKey=Deno.env.get("SHOTSTACK_API_KEY"); if(action==="motion"&&!motionKey) return json({error:"Product Motion rendering is not configured yet. Your draft is preserved; no credit was charged.",code:"MOTION_RENDER_UNAVAILABLE"},503);
+  const key=Deno.env.get("LOVABLE_API_KEY"); if(action!=="motion"&&!key) return json({error:"AI generation is not configured."},503);
   if(action==="scripts") {
+   if(!key) return json({error:"AI generation is not configured."},503);
    const {result}=createResponsesCall(req,{baseURL:"https://ai.gateway.lovable.dev/v1",apiKey:key,model:"openai/gpt-6-astra"},[{role:"user",content:JSON.stringify({product:draft.productName,audience:draft.audience,benefit:draft.benefit,offer:draft.offer,cta:draft.cta,framework:draft.framework})}],"Write exactly three distinct concise UGC ad scripts and exactly five alternative short hooks. Use only supplied facts. Never invent discounts, customer testimonials, certifications or performance claims. Scripts use hook, body, cta, caption, angle. Hooks should be short enough to speak in about three seconds.");
    const text=await result.text;
    const match=text.match(/\{[\s\S]*\}/); if(!match) return json({error:"AI returned no usable scripts. Your product details are preserved."},502);
@@ -94,6 +102,7 @@ Deno.serve(async req=>{
    return json(output.data);
   }
   const script=draft.scripts[draft.selectedScript]; if(!script) return json({error:"Choose a script before generating."},400);
+  if(action==="motion"){const invalid=validateMotionScript(script); if(invalid) return json({error:invalid},400);}
   let characterUrls:string[]=[];
   if(draft.characterId){
    const {data:character,error}=await sb.from("ugc_characters").select("id,name,image_paths").eq("id",draft.characterId).eq("user_id",user.id).maybeSingle();
@@ -104,10 +113,33 @@ Deno.serve(async req=>{
    characterUrls=images.flatMap(image=>image.signedUrl?[image.signedUrl]:[]);
    draft.characterSnapshot={id:character.id,name:character.name,imagePaths:character.image_paths};
   }
-  const {data:ad,error:insertError}=await sb.from("generated_ads").insert({user_id:user.id,email:user.email||"",product_image_url:draft.productImages[0],style_template:action==="video"?"ugc-video":"ugc-image",aspect_ratio:draft.aspectRatio,status:"processing",ad_copy:{draft,productName:draft.productName,framework:draft.framework,headline:script.hook,cta:script.cta,caption:script.caption,pipelineStage:action==="video"?"creating creator shot":"generating image"},prompt_used:`UGC creative: ${draft.productName}`}).select("id").single();
+  const {data:ad,error:insertError}=await sb.from("generated_ads").insert({user_id:user.id,email:user.email||"",product_image_url:draft.productImages[0],style_template:action==="video"?"ugc-video":action==="motion"?"ugc-motion":"ugc-image",aspect_ratio:draft.aspectRatio,status:"processing",ad_copy:{draft,productName:draft.productName,framework:draft.framework,headline:script.hook,cta:script.cta,caption:script.caption,pipelineStage:action==="video"?"creating creator shot":action==="motion"?"preparing three FLUX shots":"generating image"},prompt_used:`UGC creative: ${draft.productName}`}).select("id").single();
   if(insertError||!ad) throw new Error("Could not save your ad job."); adId=ad.id;
   const prompt=action==="video"?`Photorealistic vertical selfie-style UGC frame of one creator facing the camera, mouth closed, face clearly visible and centered, holding the exact product from the reference images near their chest. Product: ${draft.productName}. Creator appearance: ${JSON.stringify(draft.demographics)}. Setting: ${draft.setting}. Tone: ${draft.tone}. Natural lighting, no text overlays, aspect ratio ${draft.aspectRatio}.`:`Create a realistic product-focused UGC advertising photo. Preserve the exact product, packaging, color and brand from these reference images. Product: ${draft.productName}. Known benefit: ${draft.benefit}. Style: ${draft.imageStyle}. Framework: ${draft.framework}. Setting: ${draft.setting}. Creator appearance: ${JSON.stringify(draft.demographics)}. Tone: ${draft.tone}. Direction: ${draft.customDirection}. Aspect ratio ${draft.aspectRatio}. No invented testimonials, text overlays or medical transformations.`;
   const identity=draft.characterSnapshot?characterDirection(draft.characterSnapshot.name,draft.productImages.length,characterUrls.length):"";
+  if(action==="motion"){
+   if(!motionKey) throw new Error("Product Motion rendering is not configured.");
+   const sourceImages:string[]=[]; const captions=motionCaptions(script,draft.offer); const directions=motionShotDirections(script);
+   const baseCopy={draft,productName:draft.productName,framework:draft.framework,headline:script.hook,cta:script.cta,caption:script.caption,imageEngine:"flux",imageModel:"fal-ai/flux-pro/kontext/max/multi"};
+   for(let index=0;index<directions.length;index++){
+    await sb.from("generated_ads").update({ad_copy:{...baseCopy,pipelineStage:`creating FLUX shot ${index+1} of ${directions.length}`,motion:{provider:"shotstack",state:"preparing",durationSec:draft.motionDuration,sourceImages:[...sourceImages],captions}}}).eq("id",adId);
+    const imgUrl=await generateFluxImage([prompt,directions[index],identity,"Generate one standalone advertising frame, not a collage, storyboard, split screen, or text overlay."].filter(Boolean).join("\n"),[...draft.productImages,...characterUrls],draft.aspectRatio);
+    const response=await fetch(imgUrl); if(!response.ok) throw new Error(`Could not download FLUX shot ${index+1}.`);
+    const mime=(response.headers.get("content-type")||"image/jpeg").split(";")[0]; if(!/^image\/(png|jpeg|webp)$/.test(mime)) throw new Error(`FLUX shot ${index+1} returned an unsupported file.`);
+    const bytes=new Uint8Array(await response.arrayBuffer()); if(bytes.length<1024) throw new Error(`FLUX shot ${index+1} was empty or incomplete.`);
+    const extension=mime==="image/png"?"png":mime==="image/webp"?"webp":"jpg"; const path=`${user.id}/ugc-${adId}-motion-${index+1}.${extension}`;
+    const {error:uploadError}=await sb.storage.from("ugc-generated").upload(path,bytes,{contentType:mime,upsert:false}); if(uploadError) throw new Error(`Could not save FLUX shot ${index+1}.`);
+    sourceImages.push(sb.storage.from("ugc-generated").getPublicUrl(path).data.publicUrl);
+   }
+   await sb.from("generated_ads").update({generated_image_url:sourceImages[0],ad_copy:{...baseCopy,pipelineStage:draft.motionVoiceover?"recording voiceover":"preparing motion timeline",motion:{provider:"shotstack",state:"preparing",durationSec:draft.motionDuration,sourceImages,captions}}}).eq("id",adId);
+   const audioUrl=draft.motionVoiceover?await synthesizeVoice([script.hook,script.body,script.cta].filter(Boolean).join(" "),draft.demographics.gender?.toLowerCase().startsWith("m")?"am_michael":"af_heart"):null;
+   const edit=buildMotionEdit(sourceImages,captions,audioUrl,draft.aspectRatio,draft.motionDuration);
+   const job=await submitMotionRender(motionKey,edit);
+   const motion={provider:"shotstack",state:"rendering",renderId:job.renderId,durationSec:draft.motionDuration,sourceImages,captions,voiceoverUrl:audioUrl};
+   if(!admin){const {data:charged,error:credErr}=await sb.rpc("consume_credit",{_user_id:user.id,_amount:MOTION_CREDIT_COST}); if(credErr||charged!==true){await sb.from("generated_ads").update({status:"failed",ad_copy:{...baseCopy,error:"No credits left.",pipelineStage:"failed",motion}}).eq("id",adId); return json({error:"An active plan with available credits is required.",code:"NO_SUBSCRIPTION",adId},402);}}
+   await sb.from("generated_ads").update({generated_image_url:sourceImages[0],ad_copy:{...baseCopy,pipelineStage:"animating three FLUX shots",motion}}).eq("id",adId);
+   return json({adId,status:"processing"});
+  }
   let mime:string; let bytes:Uint8Array; const engine=action==="image"?draft.imageEngine:"gemini";
   if(engine==="flux"){
    if(!falKey()){await sb.from("generated_ads").update({status:"failed",ad_copy:{draft,productName:draft.productName,error:"FLUX is not configured.",pipelineStage:"failed"}}).eq("id",adId); return json({error:"FLUX image generation is not configured. No credit was charged.",adId},503);}
@@ -138,5 +170,5 @@ Deno.serve(async req=>{
   const {error:saveError}=await sb.from("generated_ads").update({generated_image_url:url.publicUrl,status:"completed",completed_at:new Date().toISOString(),ad_copy:{draft,productName:draft.productName,framework:draft.framework,headline:script.hook,cta:script.cta,caption:script.caption,imageEngine:engine,imageModel:engine==="flux"?"fal-ai/flux-pro/kontext/max/multi":"google/gemini-3.1-flash-image",pipelineStage:"done"}}).eq("id",adId); if(saveError) throw new Error("Could not save the completed ad.");
   await sb.from("notifications").insert({user_id:user.id,type:"ad_completed",title:"Your UGC image ad is ready",body:draft.productName,url:`/library?ad=${adId}`});
   return json({adId,generatedImageUrl:url.publicUrl});
- }catch(e){const message=e instanceof Error?e.message:"Generation could not complete."; console.error("ugc-studio failure",{adId,errorType:e instanceof Error?e.name:"unknown"}); if(adId) await sb.from("generated_ads").update({status:"failed"}).eq("id",adId); const status=typeof e==="object"&&e&&"statusCode"in e?Number(e.statusCode):500; return json({error:message,adId},[400,401,402,403,404,429].includes(status)?status:500);}
+ }catch(e){const message=e instanceof Error?e.message:"Generation could not complete."; console.error("ugc-studio failure",{adId,errorType:e instanceof Error?e.name:"unknown"}); if(adId){const {data:latest}=await sb.from("generated_ads").select("ad_copy").eq("id",adId).maybeSingle(); await sb.from("generated_ads").update({status:"failed",ad_copy:{...((latest?.ad_copy||{}) as Record<string,unknown>),error:message,pipelineStage:"failed"}}).eq("id",adId);} const status=typeof e==="object"&&e&&"statusCode"in e?Number(e.statusCode):500; return json({error:message,adId},[400,401,402,403,404,429].includes(status)?status:500);}
 });

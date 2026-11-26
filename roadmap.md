@@ -6,4 +6,6 @@
 - [x] Align Library and Dashboard with UGC metadata, notes, duplication, and batch export/trash.
 - [x] Remove active music modules without deleting historical media.
 - [x] Verify rules, signed-in uploads/scripts/image results/Library notes/duplication/Trash undo, and desktop/mobile layouts.
+- [x] Add Product Motion: three FLUX shots, timed text, optional Kokoro voiceover, Shotstack motion finishing, and one-credit enforcement.
+- [ ] Verify a completed Product Motion MP4 through Library playback/export: blocked by the fal.ai account's empty balance; rules, signed-in controls, error handling, and 911px layout are verified.
 - [ ] Video rendering and caption alignment: blocked by unavailable external UGC automation service and missing request/callback capability contract.

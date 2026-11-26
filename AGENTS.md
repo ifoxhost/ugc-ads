@@ -6,3 +6,4 @@
 - Force the local demo flag off in Vite so auth, storage, and generation always use the real client without modifying the managed client file.
 - Shared ad cards and details live in `AdOutputGallery` and are used by the studio and Library, preventing divergent metadata, export, and note behavior.
 - Reusable characters use owner-scoped records and private reference storage; resolve the selected character server-side and pass its signed reference images separately from product images to preserve identity without trusting client URLs.
+- Product Motion uses three FLUX frames and Shotstack motion finishing inside `ugc-studio`, with optional Kokoro narration; keep it separate from OmniHuman and music pipelines, and retain frame URLs, captions, timing, and render status in `ad_copy.motion`.
