@@ -34,3 +34,10 @@ export async function checkTalkingVideo(statusUrl: string, responseUrl: string) 
   }
   return { state: "running" as const, queuePosition: s.queue_position ?? null, status: s.status as string };
 }
+export const FLUX_MODEL = "fal-ai/flux-pro/kontext/max/multi";
+// FLUX Kontext keeps the product from reference photos; safety_tolerance 6 is the most permissive level fal allows.
+export async function generateFluxImage(prompt: string, imageUrls: string[], aspectRatio: string): Promise<string> {
+  const out = await falFetch(`https://fal.run/${FLUX_MODEL}`, { method: "POST", body: JSON.stringify({ prompt: prompt.slice(0, 4000), image_urls: imageUrls.slice(0, 6), aspect_ratio: aspectRatio, num_images: 1, output_format: "jpeg", safety_tolerance: "6", enable_safety_checker: false }) });
+  const url = out?.images?.[0]?.url; if (typeof url !== "string") throw new Error("FLUX returned no image.");
+  return url;
+}
